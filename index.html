@@ -90,29 +90,135 @@
 <div id="hit-flash"></div>
 
 <div class="screen" id="menu">
-  <h1>BLACKOUT<br>PROTOCOL</h1>
-  <h2>Operación nocturna &mdash; zona industrial</h2>
-  <div class="modes" id="modes">
-    <div class="mode-card" id="mode-waves">
-      <h3>OLEADAS</h3>
-      <p>Supervivencia pura. Oleadas de hostiles cada vez m&aacute;s numerosas y agresivas. Aguanta cuanto puedas.</p>
-      <span class="mode-go">DESPLEGAR &raquo;</span>
+  <header id="lobby-header">
+    <div id="lobby-brand">
+      <span class="brand-tag">// PROTOCOLO T&Aacute;CTICO</span>
+      <span class="brand-name">BLACKOUT<span class="brand-accent">/</span>PROTOCOL</span>
     </div>
-    <div class="mode-card" id="mode-snd">
-      <h3>BUSCAR Y DESTRUIR</h3>
-      <p>La bomba est&aacute; armada. Los bots intentar&aacute;n desactivarla &mdash; y matarte en el intento. Defi&eacute;ndela hasta la detonaci&oacute;n.</p>
-      <span class="mode-go">DESPLEGAR &raquo;</span>
+    <nav id="lobby-nav">
+      <button class="nav-tab active" data-tab="play">JUGAR</button>
+      <button class="nav-tab" data-tab="operator">OPERADOR</button>
+      <button class="nav-tab" data-tab="loadout">ARMAMENTO</button>
+      <button class="nav-tab" data-tab="settings">AJUSTES</button>
+    </nav>
+    <div id="player-badge">
+      <span class="badge-role">// OPERADOR LOCAL</span>
+      <span class="badge-status">&bull; EN ESPERA</span>
+    </div>
+  </header>
+
+  <div id="tab-play" class="lobby-view active">
+    <div id="mission-intel">
+      <div class="intel-tag">// OPERACI&Oacute;N NOCTURNA &bull; ZONA INDUSTRIAL</div>
+      <h2 id="selected-title">OLEADAS</h2>
+      <div class="intel-badge" id="selected-badge">SUPERVIVENCIA T&Aacute;CTICA // HOSTILES CRECIENTES</div>
+      <p id="selected-desc">Supervivencia pura. Oleadas de hostiles cada vez m&aacute;s numerosas y agresivas. Aguanta cuanto puedas.</p>
+      <div class="intel-stats" id="selected-params">
+        <div class="param-row"><span>RECOMPENSA DE RONDA</span><b>+60 MUNIC I&Oacute;N &bull; +35 SALUD</b></div>
+        <div class="param-row"><span>CONDICI&Oacute;N</span><b>ELIMINACI&Oacute;N TOTAL DE ESCUADRA</b></div>
+      </div>
+      <button class="btn btn-deploy" id="deploy-btn">DESPLEGAR EN COMBATE &raquo;</button>
+    </div>
+
+    <div class="modes" id="modes">
+      <div class="mode-card selected" id="mode-waves" tabindex="0">
+        <div class="mode-header">
+          <span class="mode-badge">MODO 01</span>
+          <span class="mode-status">LISTO</span>
+        </div>
+        <h3>OLEADAS</h3>
+        <p>Supervivencia pura. Oleadas de hostiles crecientes.</p>
+        <span class="mode-go">SELECCIONADO &bull; [ ESPACIO / CLIC ]</span>
+      </div>
+      <div class="mode-card" id="mode-snd" tabindex="0">
+        <div class="mode-header">
+          <span class="mode-badge">MODO 02</span>
+          <span class="mode-status">ARMADA</span>
+        </div>
+        <h3>BUSCAR Y DESTRUIR</h3>
+        <p>La bomba est&aacute; armada. Defi&eacute;ndela de los bots.</p>
+        <span class="mode-go">SELECCIONAR &raquo;</span>
+      </div>
     </div>
   </div>
-  <button class="btn" id="resume-btn" style="display:none">Reanudar</button>
-  <button class="btn btn-ghost" id="settings-btn">Ajustes</button>
-  <button class="btn btn-ghost" id="quit-btn" style="display:none">Abandonar partida</button>
-  <div class="keys">
+
+  <div id="tab-operator" class="lobby-view" style="display:none">
+    <div class="dossier-panel">
+      <div class="intel-tag">// FICHA DE SERVICIO &bull; OPERADOR</div>
+      <h2>SPECTRE</h2>
+      <div class="intel-badge">DESTACAMENTO BLACKOUT // ASALTO T&Aacute;CTICO</div>
+      <p>Especialista en incursiones nocturnas en complejos industriales de alta seguridad. Equipado con blindaje bal&iacute;stico Nivel IV y &oacute;ptica de precisi&oacute;n.</p>
+      <div class="intel-stats">
+        <div class="param-row"><span>CASCO</span><b>FAST BALLISTIC // NVG SHROUD</b></div>
+        <div class="param-row"><span>VISOR</span><b>BAL&Iacute;STICO T&Eacute;RMICO ACTIVO</b></div>
+        <div class="param-row"><span>CHALECO</span><b>PLATE CARRIER MOLLE CLASE IV</b></div>
+        <div class="param-row"><span>ESTADO F&Iacute;SICO</span><b>100% OPERATIVO</b></div>
+      </div>
+      <div class="camo-selector">
+        <span class="camo-label">CAMUFLAJE DE CAMPO:</span>
+        <div class="camo-buttons">
+          <button class="btn-camo active" data-camo="urban">URBANO NOCTURNO</button>
+          <button class="btn-camo" data-camo="specops">OPERACIONES NEGRAS</button>
+          <button class="btn-camo" data-camo="recon">RECONOCIMIENTO</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-loadout" class="lobby-view" style="display:none">
+    <div class="dossier-panel">
+      <div class="intel-tag">// ARSENAL T&Aacute;CTICO &bull; ARMA REGLAMENTARIA</div>
+      <h2>MK-7 CARBINE</h2>
+      <div class="intel-badge">FUSIL DE ASALTO 5.56&times;45mm NATO</div>
+      <p>Plataforma de asalto configurada para combate nocturno a media y corta distancia. Equilibrada para tiro r&aacute;pido con retroceso predecible y alta precisi&oacute;n en ADS.</p>
+      <div class="weapon-bars">
+        <div class="wbar-row">
+          <span>DA&Ntilde;O</span>
+          <div class="wbar-track"><div class="wbar-fill" style="width:68%"></div></div>
+          <b>34</b>
+        </div>
+        <div class="wbar-row">
+          <span>CADENCIA</span>
+          <div class="wbar-track"><div class="wbar-fill" style="width:82%"></div></div>
+          <b>570 RPM</b>
+        </div>
+        <div class="wbar-row">
+          <span>PRECISI&Oacute;N (ADS)</span>
+          <div class="wbar-track"><div class="wbar-fill" style="width:85%"></div></div>
+          <b>85%</b>
+        </div>
+        <div class="wbar-row">
+          <span>MOVILIDAD</span>
+          <div class="wbar-track"><div class="wbar-fill" style="width:78%"></div></div>
+          <b>78%</b>
+        </div>
+        <div class="wbar-row">
+          <span>CARGADOR</span>
+          <div class="wbar-track"><div class="wbar-fill" style="width:60%"></div></div>
+          <b>30 / 120</b>
+        </div>
+      </div>
+      <div class="intel-stats" style="margin-top:16px">
+        <div class="param-row"><span>CA&Ntilde;&Oacute;N</span><b>14.5" CON BOCACHA APAGALLAMAS</b></div>
+        <div class="param-row"><span>&Oacute;PTICA</span><b>MIRA R&Eacute;FLEX MILITAR DE PUNTO ROJO</b></div>
+        <div class="param-row"><span>CULATA</span><b>T&Aacute;CTICA ALIGERADA</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="pause-box" style="display:none">
+    <h2 class="pause-title">PARTIDA EN PAUSA</h2>
+    <button class="btn" id="resume-btn" style="display:none">Reanudar</button>
+    <button class="btn btn-ghost" id="settings-btn">Ajustes</button>
+    <button class="btn btn-ghost" id="quit-btn" style="display:none">Abandonar partida</button>
+  </div>
+
+  <div class="keys" id="lobby-keys">
     <b>WASD</b><span>Moverse</span>
-    <b>Ratón</b><span>Apuntar / Disparar</span>
+    <b>Rat&oacute;n</b><span>Apuntar / Disparar</span>
     <b>Click der.</b><span>Mira (ADS)</span>
     <b>Shift</b><span>Correr</span>
-    <b>Espacio</b><span>Saltar</span>
+    <b>Espacio</b><span>Saltar / Desplegar</span>
     <b>R</b><span>Recargar</span>
     <b>Esc</b><span>Pausa</span>
   </div>

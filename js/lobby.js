@@ -7,7 +7,7 @@ lobbyScene.background = new THREE.Color(0x060911);
 lobbyScene.fog = new THREE.FogExp2(0x060911, 0.038);
 
 export const lobbyCamera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 0.1, 80);
-lobbyCamera.position.set(0.15, 1.42, 3.4);
+lobbyCamera.position.set(0.12, 1.38, 3.1);
 lobbyScene.add(lobbyCamera);
 
 addEventListener('resize', () => {
@@ -30,21 +30,21 @@ const matCrateLobby = new THREE.MeshStandardMaterial({ map: texCrate, roughness:
 const matContainerLobby = new THREE.MeshStandardMaterial({ map: texMetal, color: 0x2b3844, roughness: 0.65, metalness: 0.4 });
 const matBarrelLobby = new THREE.MeshStandardMaterial({ map: texMetal, color: 0x3d4435, roughness: 0.6, metalness: 0.5 });
 
-const matUniform = new THREE.MeshStandardMaterial({ color: 0x262c33, roughness: 0.85 });
-const matVest = new THREE.MeshStandardMaterial({ color: 0x17191d, roughness: 0.9, metalness: 0.1 });
-const matArmor = new THREE.MeshStandardMaterial({ color: 0x2e343b, roughness: 0.65, metalness: 0.35 });
-const matHelmet = new THREE.MeshStandardMaterial({ color: 0x22272e, roughness: 0.6, metalness: 0.3 });
-const matVisor = new THREE.MeshStandardMaterial({ color: 0x11161d, roughness: 0.2, metalness: 0.8, emissive: 0xff3b1a, emissiveIntensity: 0.5 });
-const matSkin = new THREE.MeshStandardMaterial({ color: 0x1e2024, roughness: 0.9 });
-const matGloves = new THREE.MeshStandardMaterial({ color: 0x1b1c1e, roughness: 0.8 });
-const matBoots = new THREE.MeshStandardMaterial({ color: 0x121315, roughness: 0.7, metalness: 0.2 });
-const matGun = new THREE.MeshStandardMaterial({ color: 0x16181b, roughness: 0.5, metalness: 0.75 });
-const matGunMetal = new THREE.MeshStandardMaterial({ color: 0x2d3036, roughness: 0.45, metalness: 0.65 });
+const matUniform = new THREE.MeshStandardMaterial({ color: 0x38424f, roughness: 0.75 });
+const matVest = new THREE.MeshStandardMaterial({ color: 0x252a32, roughness: 0.8, metalness: 0.2 });
+const matArmor = new THREE.MeshStandardMaterial({ color: 0x454e5a, roughness: 0.65, metalness: 0.35 });
+const matHelmet = new THREE.MeshStandardMaterial({ color: 0x353d47, roughness: 0.6, metalness: 0.3 });
+const matVisor = new THREE.MeshStandardMaterial({ color: 0x11161d, roughness: 0.2, metalness: 0.8, emissive: 0xff3b1a, emissiveIntensity: 1.6 });
+const matSkin = new THREE.MeshStandardMaterial({ color: 0x282c32, roughness: 0.9 });
+const matGloves = new THREE.MeshStandardMaterial({ color: 0x22262c, roughness: 0.8 });
+const matBoots = new THREE.MeshStandardMaterial({ color: 0x181a1d, roughness: 0.7, metalness: 0.2 });
+const matGun = new THREE.MeshStandardMaterial({ color: 0x202328, roughness: 0.5, metalness: 0.75 });
+const matGunMetal = new THREE.MeshStandardMaterial({ color: 0x424750, roughness: 0.45, metalness: 0.65 });
 
-lobbyScene.add(new THREE.HemisphereLight(0x28384f, 0x07090e, 0.6));
+lobbyScene.add(new THREE.HemisphereLight(0x28384f, 0x07090e, 0.65));
 
-const keyLight = new THREE.DirectionalLight(0xdbe4f0, 1.45);
-keyLight.position.set(2.4, 4.2, 3.2);
+const keyLight = new THREE.DirectionalLight(0xe2eaf6, 1.85);
+keyLight.position.set(2.2, 4.0, 3.0);
 keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(1024, 1024);
 keyLight.shadow.camera.near = 0.5;
@@ -56,12 +56,16 @@ keyLight.shadow.camera.bottom = -1;
 keyLight.shadow.bias = -0.001;
 lobbyScene.add(keyLight);
 
-const rimLight = new THREE.PointLight(0x38bdf8, 3.2, 8, 2);
-rimLight.position.set(-1.2, 2.0, -1.8);
+const fillLight = new THREE.PointLight(0xa0aec0, 1.5, 7, 2);
+fillLight.position.set(1.0, 1.6, 2.0);
+lobbyScene.add(fillLight);
+
+const rimLight = new THREE.PointLight(0x38bdf8, 4.2, 7, 2);
+rimLight.position.set(0.4, 2.1, -1.4);
 lobbyScene.add(rimLight);
 
-const warmLight = new THREE.PointLight(0xf59e0b, 2.4, 7, 2);
-warmLight.position.set(2.6, 1.2, -1.2);
+const warmLight = new THREE.PointLight(0xf59e0b, 1.4, 6, 2);
+warmLight.position.set(3.4, 1.1, -1.6);
 lobbyScene.add(warmLight);
 
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 24), matFloor);
@@ -126,10 +130,10 @@ function addCrate(x, y, z, ry, s = 1) {
   return m;
 }
 
-addCrate(2.8, 0, -1.2, -0.22);
-addCrate(3.8, 0, -1.5, 0.15);
-addCrate(3.2, 1.1, -1.3, 0.08);
-addCrate(2.1, 0, -2.2, 0.45, 0.85);
+addCrate(3.2, 0, -1.5, -0.22);
+addCrate(4.1, 0, -1.8, 0.15);
+addCrate(3.5, 1.1, -1.6, 0.08);
+addCrate(2.4, 0, -2.5, 0.45, 0.85);
 
 const barrelGeo = new THREE.CylinderGeometry(0.4, 0.4, 1.25, 14);
 for (const [bx, bz] of [[-1.6, -2.6], [-1.0, -2.8], [-1.3, -2.0]]) {
@@ -141,8 +145,8 @@ for (const [bx, bz] of [[-1.6, -2.6], [-1.0, -2.8], [-1.3, -2.0]]) {
 }
 
 const operator = new THREE.Group();
-operator.position.set(0.85, 0, 0);
-operator.rotation.y = -0.32;
+operator.position.set(1.15, 0, -0.05);
+operator.rotation.y = -0.38;
 lobbyScene.add(operator);
 
 const lBoot = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, 0.32), matBoots);
@@ -364,7 +368,38 @@ gunStock.castShadow = true;
 weaponGroup.add(gunStock);
 
 let idleTime = 0;
-const targetLook = new THREE.Vector3(0.55, 1.15, 0);
+const targetLook = new THREE.Vector3(0.68, 1.18, 0);
+const curLook = new THREE.Vector3(0.68, 1.18, 0);
+const targetCam = new THREE.Vector3(0.12, 1.38, 3.1);
+
+export function setLobbyView(view) {
+  if (view === 'operator') {
+    targetCam.set(0.72, 1.45, 2.2);
+    targetLook.set(1.15, 1.32, 0);
+  } else if (view === 'loadout') {
+    targetCam.set(0.62, 1.25, 2.0);
+    targetLook.set(1.1, 1.1, 0);
+  } else {
+    targetCam.set(0.12, 1.38, 3.1);
+    targetLook.set(0.68, 1.18, 0);
+  }
+}
+
+export function setOperatorCamo(scheme) {
+  if (scheme === 'specops') {
+    matUniform.color.setHex(0x20242a);
+    matVest.color.setHex(0x16181b);
+    matVisor.emissive.setHex(0xff9900);
+  } else if (scheme === 'recon') {
+    matUniform.color.setHex(0x323e35);
+    matVest.color.setHex(0x202822);
+    matVisor.emissive.setHex(0x00e5ff);
+  } else {
+    matUniform.color.setHex(0x38424f);
+    matVest.color.setHex(0x252a32);
+    matVisor.emissive.setHex(0xff3b1a);
+  }
+}
 
 export function updateLobby(dt) {
   idleTime += dt;
@@ -375,7 +410,13 @@ export function updateLobby(dt) {
   headGroup.rotation.x = Math.cos(idleTime * 0.7) * 0.015;
   weaponGroup.position.y = -0.02 + Math.sin(idleTime * 1.8 + 0.3) * 0.005;
 
-  lobbyCamera.position.x = 0.15 + Math.sin(idleTime * 0.35) * 0.045;
-  lobbyCamera.position.y = 1.42 + Math.cos(idleTime * 0.45) * 0.025;
-  lobbyCamera.lookAt(targetLook);
+  const swayX = Math.sin(idleTime * 0.35) * 0.035;
+  const swayY = Math.cos(idleTime * 0.45) * 0.02;
+
+  lobbyCamera.position.x += (targetCam.x + swayX - lobbyCamera.position.x) * Math.min(1, dt * 4);
+  lobbyCamera.position.y += (targetCam.y + swayY - lobbyCamera.position.y) * Math.min(1, dt * 4);
+  lobbyCamera.position.z += (targetCam.z - lobbyCamera.position.z) * Math.min(1, dt * 4);
+
+  curLook.lerp(targetLook, Math.min(1, dt * 4));
+  lobbyCamera.lookAt(curLook);
 }

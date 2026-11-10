@@ -8,7 +8,7 @@ import { spawnTracer, spawnBurst, spawnDecal, updateEffects, resetEffects } from
 import { weapon, gunGroup, muzzleFlash, flashSprite, GUN_HIP, GUN_ADS } from './weapon.js';
 import { enemies, makeEnemy, damageEnemy, enemyLOS, clearEnemies, updateCorpses } from './enemies.js';
 import { createDiagnostics } from './diagnostics.js';
-import { lobbyScene, lobbyCamera, updateLobby } from './lobby.js';
+import { lobbyScene, lobbyCamera, updateLobby, setLobbyView, setOperatorCamo } from './lobby.js';
 
 /* ---------------- Ajustes: aplicación y UI ---------------- */
 function applySettings() {
@@ -53,6 +53,69 @@ $('set-volume').oninput = e => {
   applySettings(); saveSettings();
   sfxClick(1200, 0.12, 0.04);
 };
+
+let currentTab = 'play';
+const TABS = ['play', 'operator', 'loadout', 'settings'];
+
+function switchTab(tab) {
+  if (tab === 'settings') {
+    $('menu').style.display = 'none';
+    $('settings-screen').style.display = 'flex';
+    refreshSettingsUI();
+    return;
+  }
+  currentTab = tab;
+  document.querySelectorAll('.nav-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+  document.querySelectorAll('.lobby-view').forEach(v => {
+    v.style.display = 'none';
+    v.classList.remove('active');
+  });
+  const view = $('tab-' + tab);
+  if (view) {
+    view.style.display = 'block';
+    view.classList.add('active');
+  }
+  setLobbyView(tab);
+}
+
+let selectedMode = 'waves';
+const MODE_INTEL = {
+  waves: {
+    title: 'OLEADAS',
+    badge: 'SUPERVIVENCIA TÁCTICA // HOSTILES CRECIENTES',
+    desc: 'Supervivencia pura. Oleadas de hostiles cada vez más numerosas y agresivas. Aguanta cuanto puedas.',
+    params: '<div class="param-row"><span>RECOMPENSA DE RONDA</span><b>+60 MUNIC IÓN • +35 SALUD</b></div><div class="param-row"><span>CONDICIÓN</span><b>ELIMINACIÓN TOTAL DE ESCUADRA</b></div>',
+  },
+  snd: {
+    title: 'BUSCAR Y DESTRUIR',
+    badge: 'DEFENSA DE OBJETIVO // DETONACIÓN A 90s',
+    desc: 'La bomba está armada en el patio central. Los bots intentarán desactivarla en 10s acumulados y eliminarte. Defiéndela.',
+    params: '<div class="param-row"><span>TEMPORIZADOR</span><b>90 SEGUNDOS HASTA DETONAR</b></div><div class="param-row"><span>DESACTIVACIÓN</span><b>10s ACUMULADOS POR BOTS</b></div>',
+  },
+};
+
+function selectMode(mode) {
+  selectedMode = mode;
+  const info = MODE_INTEL[mode];
+  if (!info) return;
+  const titleEl = $('selected-title');
+  const badgeEl = $('selected-badge');
+  const descEl = $('selected-desc');
+  const paramsEl = $('selected-params');
+  if (titleEl) titleEl.textContent = info.title;
+  if (badgeEl) badgeEl.textContent = info.badge;
+  if (descEl) descEl.textContent = info.desc;
+  if (paramsEl) paramsEl.innerHTML = info.params;
+  $('mode-waves').classList.toggle('selected', mode === 'waves');
+  $('mode-snd').classList.toggle('selected', mode === 'snd');
+  const wGo = $('mode-waves').querySelector('.mode-go');
+  const sGo = $('mode-snd').querySelector('.mode-go');
+  if (wGo) wGo.textContent = mode === 'waves' ? 'SELECCIONADO • [ ESPACIO / CLIC ]' : 'SELECCIONAR »';
+  if (sGo) sGo.textContent = mode === 'snd' ? 'SELECCIONADO • [ ESPACIO / CLIC ]' : 'SELECCIONAR »';
+}
+
 $('settings-btn').onclick = () => {
   $('menu').style.display = 'none';
   $('settings-screen').style.display = 'flex';
@@ -60,7 +123,15 @@ $('settings-btn').onclick = () => {
 };
 $('settings-back').onclick = () => {
   $('settings-screen').style.display = 'none';
-  $('menu').style.display = 'flex';
+  if (phase === 'PAUSED') {
+    $('menu').classList.add('paused');
+    $('pause-box').style.display = 'flex';
+    $('menu').style.display = 'flex';
+  } else {
+    $('menu').classList.remove('paused');
+    $('menu').style.display = 'flex';
+    switchTab(currentTab || 'play');
+  }
 };
 $('settings-reset').onclick = () => {
   Object.assign(settings, SETTINGS_DEFAULTS);
@@ -104,6 +175,22 @@ addEventListener('keydown', e => {
   if (e.code === 'Escape') {
     if (phase === 'PLAYING') showMenuPause();
     else if ($('settings-screen').style.display === 'flex') $('settings-back').onclick();
+  } else if (phase === 'MENU' && $('settings-screen').style.display !== 'flex') {
+    if (e.code === 'KeyQ') {
+      const idx = TABS.indexOf(currentTab);
+      const nextIdx = (idx - 1 + TABS.length) % TABS.length;
+      switchTab(TABS[nextIdx]);
+    } else if (e.code === 'KeyE') {
+      const idx = TABS.indexOf(currentTab);
+      const nextIdx = (idx + 1) % TABS.length;
+      switchTab(TABS[nextIdx]);
+    } else if (e.code === 'Digit1' || (currentTab === 'play' && e.code === 'ArrowLeft')) {
+      selectMode('waves');
+    } else if (e.code === 'Digit2' || (currentTab === 'play' && e.code === 'ArrowRight')) {
+      selectMode('snd');
+    } else if ((e.code === 'Space' || e.code === 'Enter') && currentTab === 'play') {
+      startGame(selectedMode);
+    }
   }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
@@ -470,6 +557,8 @@ function startGame(mode) {
   $('wave-summary').style.display = 'none';
   $('defuse-panel').style.display = 'none';
   $('quit-btn').style.display = 'none';
+  $('resume-btn').style.display = 'none';
+  $('pause-box').style.display = 'none';
   $('menu').classList.remove('paused');
   resetWaveStats();
 
@@ -534,6 +623,7 @@ function showMenuPause() {
   clearInput();
   document.exitPointerLock();
   $('modes').style.display = 'none';
+  $('pause-box').style.display = 'flex';
   $('resume-btn').style.display = 'inline-block';
   $('quit-btn').style.display = 'inline-block';
   $('menu').classList.add('paused');
@@ -543,6 +633,9 @@ function showMenuPause() {
 function resumeGame() {
   if (phase !== 'PAUSED') return;
   $('menu').classList.remove('paused');
+  $('pause-box').style.display = 'none';
+  $('resume-btn').style.display = 'none';
+  $('quit-btn').style.display = 'none';
   $('menu').style.display = 'none';
   $('hud').style.display = 'block';
   phase = 'PLAYING';
@@ -561,15 +654,33 @@ function backToMenu() {
   $('death-screen').style.display = 'none';
   $('wave-summary').style.display = 'none';
   $('hud').style.display = 'none';
-  $('modes').style.display = 'flex';
+  $('menu').classList.remove('paused');
+  $('pause-box').style.display = 'none';
   $('resume-btn').style.display = 'none';
   $('quit-btn').style.display = 'none';
-  $('menu').classList.remove('paused');
+  $('modes').style.display = 'flex';
+  switchTab('play');
+  selectMode(selectedMode || 'waves');
   $('menu').style.display = 'flex';
 }
 
+document.querySelectorAll('.nav-tab').forEach(btn => {
+  btn.onclick = () => switchTab(btn.dataset.tab);
+});
+
+document.querySelectorAll('.btn-camo').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.btn-camo').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    setOperatorCamo(btn.dataset.camo);
+  };
+});
+
+$('mode-waves').onmouseenter = () => selectMode('waves');
+$('mode-snd').onmouseenter = () => selectMode('snd');
 $('mode-waves').onclick = () => startGame('waves');
 $('mode-snd').onclick = () => startGame('snd');
+if ($('deploy-btn')) $('deploy-btn').onclick = () => startGame(selectedMode);
 $('retry-btn').onclick = () => startGame(gameMode);
 $('resume-btn').onclick = resumeGame;
 $('quit-btn').onclick = backToMenu;
@@ -893,6 +1004,8 @@ const diagnostics = createDiagnostics(renderer, scene, () => {
   backToMenu,
   resumeGame,
   pause: () => { if (phase === 'PLAYING') showMenuPause(); },
+  switchTab,
+  selectMode,
 });
 
 applySettings();
