@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BLACKOUT PROTOCOL</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud">
+  <div id="crosshair"><span class="t"></span><span class="b"></span><span class="l"></span><span class="r"></span></div>
+  <div id="hitmarker"><span class="t"></span><span class="b"></span><span class="l"></span><span class="r"></span></div>
+  <div class="panel" id="health-panel">
+    <div id="health-num">100</div>
+    <div id="health-bar"><div id="health-fill"></div></div>
+  </div>
+  <div class="panel" id="ammo-panel">
+    <div id="weapon-name">MK-7 Carbine</div>
+    <div><span id="ammo-num">30</span> <span id="ammo-reserve">/ 120</span></div>
+  </div>
+  <div class="panel" id="wave-panel">
+    <div id="wave-num">OLEADA 1</div>
+    <div id="enemies-left">ENEMIGOS: 0</div>
+  </div>
+  <div class="panel" id="kills-panel">BAJAS: <span id="kills">0</span></div>
+  <div class="panel" id="defuse-panel">
+    <div id="defuse-label">&iexcl;EST&Aacute;N DESACTIVANDO LA BOMBA!</div>
+    <div id="defuse-bar"><div id="defuse-fill"></div></div>
+  </div>
+  <div id="reload-hint">[ R ] RECARGAR</div>
+  <div id="msg"></div>
+  <div id="dmg-indicators"></div>
+  <div id="headshot-banner">
+    <svg viewBox="0 0 340 210" width="340" height="210" aria-hidden="true">
+      <!-- salpicadura de sangre -->
+      <g fill="#8e0d0d" opacity="0.92">
+        <ellipse cx="168" cy="96" rx="92" ry="64"/>
+        <ellipse cx="96" cy="70" rx="26" ry="18" transform="rotate(-20 96 70)"/>
+        <ellipse cx="248" cy="66" rx="22" ry="14" transform="rotate(15 248 66)"/>
+        <ellipse cx="236" cy="148" rx="30" ry="16" transform="rotate(-12 236 148)"/>
+        <ellipse cx="92" cy="140" rx="24" ry="13" transform="rotate(18 92 140)"/>
+        <circle cx="62" cy="96" r="7"/><circle cx="52" cy="118" r="4"/>
+        <circle cx="282" cy="92" r="8"/><circle cx="294" cy="118" r="5"/>
+        <circle cx="130" cy="34" r="6"/><circle cx="206" cy="28" r="5"/><circle cx="170" cy="22" r="4"/>
+        <circle cx="156" cy="176" r="6"/><circle cx="196" cy="182" r="4"/><circle cx="118" cy="170" r="5"/>
+      </g>
+      <g fill="#c41616" opacity="0.85">
+        <ellipse cx="168" cy="94" rx="70" ry="48"/>
+        <circle cx="246" cy="60" r="9"/><circle cx="90" cy="64" r="8"/>
+      </g>
+      <!-- cráneo -->
+      <g>
+        <ellipse cx="166" cy="84" rx="44" ry="40" fill="#e3d9c6"/>
+        <rect x="140" y="106" width="52" height="34" rx="11" fill="#e3d9c6"/>
+        <!-- cuencas -->
+        <ellipse cx="150" cy="86" rx="11" ry="13" fill="#17120e"/>
+        <ellipse cx="184" cy="86" rx="11" ry="13" fill="#17120e"/>
+        <path d="M166 98 l-6 12 h12 z" fill="#17120e"/>
+        <!-- dientes -->
+        <g fill="#d6ccb8" stroke="#17120e" stroke-width="1.6">
+          <rect x="146" y="124" width="9" height="13" rx="2"/>
+          <rect x="157" y="124" width="9" height="13" rx="2"/>
+          <rect x="168" y="124" width="9" height="13" rx="2"/>
+          <rect x="179" y="124" width="9" height="13" rx="2"/>
+        </g>
+        <!-- grietas del impacto -->
+        <g stroke="#4a4136" stroke-width="2" fill="none" stroke-linecap="round">
+          <path d="M150 56 l-10 -9"/><path d="M146 62 l-13 -3"/><path d="M158 52 l-3 -11"/>
+        </g>
+        <!-- orificio de bala -->
+        <circle cx="151" cy="60" r="10" fill="#5e0808"/>
+        <circle cx="151" cy="60" r="6" fill="#0a0404"/>
+        <!-- salida: chorro + bala -->
+        <path d="M210 52 l44 -10 -4 7 14 -2 -42 16 5 -7 z" fill="#c41616"/>
+        <g transform="rotate(-10 262 48)">
+          <rect x="250" y="44" width="18" height="8" rx="4" fill="#d8a93c"/>
+          <path d="M268 44 l9 4 -9 4 z" fill="#b8882a"/>
+        </g>
+        <g stroke="#ffd9a0" stroke-width="2" stroke-linecap="round" opacity="0.9">
+          <path d="M222 44 h16"/><path d="M226 56 h14"/>
+        </g>
+      </g>
+    </svg>
+    <div id="headshot-text">&iexcl;BOOM HEADSHOT!</div>
+  </div>
+</div>
+<div id="damage-vignette"></div>
+<div id="hit-flash"></div>
+
+<div class="screen" id="menu">
+  <h1>BLACKOUT<br>PROTOCOL</h1>
+  <h2>Operación nocturna &mdash; zona industrial</h2>
+  <div class="modes" id="modes">
+    <div class="mode-card" id="mode-waves">
+      <h3>OLEADAS</h3>
+      <p>Supervivencia pura. Oleadas de hostiles cada vez m&aacute;s numerosas y agresivas. Aguanta cuanto puedas.</p>
+      <span class="mode-go">DESPLEGAR &raquo;</span>
+    </div>
+    <div class="mode-card" id="mode-snd">
+      <h3>BUSCAR Y DESTRUIR</h3>
+      <p>La bomba est&aacute; armada. Los bots intentar&aacute;n desactivarla &mdash; y matarte en el intento. Defi&eacute;ndela hasta la detonaci&oacute;n.</p>
+      <span class="mode-go">DESPLEGAR &raquo;</span>
+    </div>
+  </div>
+  <button class="btn" id="resume-btn" style="display:none">Reanudar</button>
+  <button class="btn btn-ghost" id="settings-btn">Ajustes</button>
+  <div class="keys">
+    <b>WASD</b><span>Moverse</span>
+    <b>Ratón</b><span>Apuntar / Disparar</span>
+    <b>Click der.</b><span>Mira (ADS)</span>
+    <b>Shift</b><span>Correr</span>
+    <b>Espacio</b><span>Saltar</span>
+    <b>R</b><span>Recargar</span>
+    <b>Esc</b><span>Pausa</span>
+  </div>
+</div>
+
+<div class="screen" id="death-screen">
+  <h1 id="death-title">K.I.A.</h1>
+  <div id="death-stats"></div>
+  <button class="btn" id="retry-btn">Reintentar</button>
+  <button class="btn btn-ghost" id="menu-btn">Men&uacute; principal</button>
+</div>
+
+<div class="screen" id="wave-summary">
+  <h1 id="ws-title" style="font-size:30px;letter-spacing:8px">OLEADA SUPERADA</h1>
+  <h2>Informe de combate</h2>
+  <div class="stats-grid">
+    <span>Bajas</span><b id="ws-kills">0</b>
+    <span>Headshots letales</span><b id="ws-headshots">0</b>
+    <span>Disparos</span><b id="ws-shots">0</b>
+    <span>Precisi&oacute;n</span><b id="ws-accuracy">0%</b>
+    <span>Da&ntilde;o infligido</span><b id="ws-dmg-dealt">0</b>
+    <span>Da&ntilde;o recibido</span><b id="ws-dmg-taken">0</b>
+    <span>Tiempo</span><b id="ws-time">0s</b>
+  </div>
+  <div id="ws-reward">+60 MUNICI&Oacute;N &nbsp;&middot;&nbsp; +35 SALUD</div>
+  <button class="btn" id="continue-btn">Continuar</button>
+</div>
+
+<div class="screen" id="settings-screen">
+  <h1 style="font-size:32px;letter-spacing:9px">AJUSTES</h1>
+  <h2>Imagen y sonido</h2>
+  <div class="settings-box">
+    <div class="srow">
+      <label>Brillo</label>
+      <input type="range" id="set-brightness" min="50" max="200" step="5">
+      <span class="val" id="val-brightness"></span>
+    </div>
+    <div class="srow">
+      <label>Campo de visión</label>
+      <input type="range" id="set-fov" min="60" max="100" step="1">
+      <span class="val" id="val-fov"></span>
+    </div>
+    <div class="srow">
+      <label>Sombras</label>
+      <select id="set-shadows">
+        <option value="off">Desactivadas</option>
+        <option value="low">Bajas</option>
+        <option value="high">Altas</option>
+      </select>
+      <span class="val"></span>
+    </div>
+    <div class="srow">
+      <label>Volumen</label>
+      <input type="range" id="set-volume" min="0" max="100" step="5">
+      <span class="val" id="val-volume"></span>
+    </div>
+  </div>
+  <button class="btn" id="settings-back">Volver</button>
+  <button class="btn btn-ghost" id="settings-reset">Restablecer</button>
+</div>
+
+<div id="loading">CARGANDO&hellip;</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
