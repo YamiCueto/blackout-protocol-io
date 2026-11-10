@@ -61,7 +61,7 @@ export function updateEffects(dt) {
   for (let i = debrisArr.length - 1; i >= 0; i--) {
     const d = debrisArr[i];
     d.life -= dt;
-    if (d.life <= 0) { scene.remove(d.mesh); d.mesh.geometry.dispose(); debrisArr.splice(i, 1); continue; }
+    if (d.life <= 0) { scene.remove(d.mesh); debrisArr.splice(i, 1); continue; }
     d.vel.y -= 14 * dt;
     d.mesh.position.addScaledVector(d.vel, dt);
     d.mesh.rotation.x += d.ang.x * dt;
@@ -98,6 +98,8 @@ export function resetEffects() {
   tracers.length = 0;
   for (const p of particles) { scene.remove(p); p.material.dispose(); }
   particles.length = 0;
-  for (const d of debrisArr) { scene.remove(d.mesh); d.mesh.geometry.dispose(); }
+  for (const d of debrisArr) scene.remove(d.mesh);
   debrisArr.length = 0;
+  for (const d of decals) { scene.remove(d); d.geometry.dispose(); d.material.dispose(); }
+  decals.length = 0;
 }

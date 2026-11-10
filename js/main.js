@@ -6,7 +6,8 @@ import { audio, applyVolume, sfxShot, sfxClick, sfxReload, sfxHurt, sfxEnemyShot
 import { ARENA, moon, pushOutCircle, pointBlocked, solidMeshes } from './world.js';
 import { spawnTracer, spawnBurst, spawnDecal, updateEffects, resetEffects } from './effects.js';
 import { weapon, gunGroup, muzzleFlash, flashSprite, GUN_HIP, GUN_ADS } from './weapon.js';
-import { enemies, makeEnemy, damageEnemy, enemyLOS, clearEnemies } from './enemies.js';
+import { enemies, makeEnemy, damageEnemy, enemyLOS, clearEnemies, updateCorpses } from './enemies.js';
+import { createDiagnostics } from './diagnostics.js';
 
 /* ---------------- Ajustes: aplicación y UI ---------------- */
 function applySettings() {
@@ -75,16 +76,52 @@ const player = {
   alive: false,
 };
 const keys = {};
-let locked = false, paused = true;
+let locked = false, phase = 'MENU';
 let mouseDown = false, adsDown = false, adsAmount = 0;
+let matchTime = 0, endDelay = 0;
 
-addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'KeyR') tryReload(); });
+function clearInput() {
+  for (const k in keys) keys[k] = false;
+  mouseDown = false;
+  adsDown = false;
+}
+
+function requestLock() {
+  if (new URLSearchParams(location.search).has('nolock')) { locked = true; return; }
+  const r = renderer.domElement.requestPointerLock();
+  if (r && typeof r.catch === 'function') r.catch(onLockFailed);
+}
+
+function onLockFailed() {
+  if (new URLSearchParams(location.search).has('nolock')) return;
+  if (phase === 'PLAYING' && !locked) showMenuPause();
+}
+
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'KeyR' && phase === 'PLAYING') tryReload();
+  if (e.code === 'Escape') {
+    if (phase === 'PLAYING') showMenuPause();
+    else if ($('settings-screen').style.display === 'flex') $('settings-back').onclick();
+  }
+});
 addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('blur', () => {
+  clearInput();
+  if (phase === 'PLAYING') showMenuPause();
+});
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) return;
+  clearInput();
+  if (phase === 'PLAYING') showMenuPause();
+});
 
 document.addEventListener('pointerlockchange', () => {
+  if (new URLSearchParams(location.search).has('nolock')) return;
   locked = document.pointerLockElement === renderer.domElement;
-  if (!locked && player.alive && !inSummary) showMenuPause();
+  if (!locked && phase === 'PLAYING') showMenuPause();
 });
+document.addEventListener('pointerlockerror', onLockFailed);
 addEventListener('mousemove', e => {
   if (!locked) return;
   player.yaw -= e.movementX * 0.0021;
@@ -232,12 +269,12 @@ function tryReload() {
 }
 
 /* ---------------- Oleadas y estadísticas ---------------- */
-let wave = 0, kills = 0, waveDelay = 0, betweenWaves = true, inSummary = false;
+let wave = 0, kills = 0, waveDelay = 0, betweenWaves = true;
 
 let waveStats = null, waveStartT = 0;
 function resetWaveStats() {
   waveStats = { shots: 0, hits: 0, kills: 0, headshots: 0, dealt: 0, taken: 0 };
-  waveStartT = performance.now();
+  waveStartT = matchTime;
 }
 resetWaveStats();
 
@@ -268,7 +305,12 @@ function createBomb() {
 }
 
 function removeBomb() {
-  if (bombGroup) { scene.remove(bombGroup); bombGroup = null; bombLight = null; }
+  if (!bombGroup) return;
+  scene.remove(bombGroup);
+  bombGroup.traverse(o => {
+    if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); }
+  });
+  bombGroup = null; bombLight = null;
 }
 
 function spawnSndEnemy() {
@@ -283,7 +325,7 @@ function spawnSndEnemy() {
     tries++;
   } while ((pointBlocked(x, z, 0.8) || player.pos.distanceTo(new THREE.Vector3(x, 0, z)) < 16) && tries < 24);
   const e = makeEnemy(x, z);
-  const elapsed = (performance.now() - snd.startT) / 1000;
+  const elapsed = matchTime - snd.startT;
   e.hp = 100 + elapsed * 0.8;
   e.speed += Math.min(elapsed * 0.02, 1.2);
 }
@@ -306,10 +348,7 @@ function detonateBomb() {
   for (const e of enemies) {
     if (e.alive && e.group.position.distanceTo(bombPos) < 30) { e.alive = false; e.deathT = 0; }
   }
-  setTimeout(() => {
-    if (player.alive) showEndScreen(true, 'OBJETIVO CUMPLIDO',
-      `BOMBA DETONADA &nbsp;&middot;&nbsp; BAJAS: ${kills}`);
-  }, 1600);
+  endDelay = 1.6;
 }
 
 function spawnWave() {
@@ -337,10 +376,10 @@ function spawnWave() {
 }
 
 function showWaveSummary() {
-  inSummary = true;
-  paused = true;
+  phase = 'SUMMARY';
+  clearInput();
   document.exitPointerLock();
-  const secs = Math.round((performance.now() - waveStartT) / 1000);
+  const secs = Math.round(matchTime - waveStartT);
   const acc = waveStats.shots ? Math.round(waveStats.hits / waveStats.shots * 100) : 0;
   $('ws-title').textContent = 'OLEADA ' + wave + ' SUPERADA';
   $('ws-kills').textContent = waveStats.kills;
@@ -355,12 +394,12 @@ function showWaveSummary() {
 }
 
 $('continue-btn').onclick = () => {
-  inSummary = false;
+  if (phase !== 'SUMMARY') return;
   $('wave-summary').style.display = 'none';
   $('hud').style.display = 'block';
-  paused = false;
+  phase = 'PLAYING';
   waveDelay = 1.5; // la siguiente oleada entra enseguida
-  renderer.domElement.requestPointerLock();
+  requestLock();
 };
 
 function flashMsg(text) {
@@ -422,12 +461,14 @@ function startGame(mode) {
   resetEffects();
   clearDamageIndicators();
   removeBomb();
-  hitFlash = 0;
+  clearInput();
+  hitFlash = 0; shake = 0; bobT = 0; flashTimer = 0;
+  adsAmount = 0; matchTime = 0; endDelay = 0;
   $('hit-flash').style.opacity = 0;
   $('headshot-banner').classList.remove('show');
   $('wave-summary').style.display = 'none';
   $('defuse-panel').style.display = 'none';
-  inSummary = false;
+  $('quit-btn').style.display = 'none';
   resetWaveStats();
 
   player.vel.set(0, 0, 0);
@@ -435,12 +476,17 @@ function startGame(mode) {
   player.hp = 100; player.alive = true;
   weapon.ammo = weapon.magSize; weapon.reserve = 120;
   weapon.reloading = false; weapon.recoil = 0;
+  weapon.cooldown = 0; weapon.reloadT = 0;
+  gunGroup.rotation.set(0, 0, 0);
+  gunGroup.position.copy(GUN_HIP);
+  muzzleFlash.intensity = 0;
+  flashSprite.visible = false;
   wave = 0; kills = 0; $('kills').textContent = 0;
 
   if (gameMode === 'snd') {
     player.pos.set(0, 1.7, 18);
     player.yaw = 0; // mirando hacia la bomba
-    snd = { timeLeft: SND_DURATION, defuse: 0, spawnTimer: 1, beepT: 0, sparkT: 0, startT: performance.now(), ended: false, spawned: 0 };
+    snd = { timeLeft: SND_DURATION, defuse: 0, spawnTimer: 1, beepT: 0, sparkT: 0, startT: matchTime, ended: false, spawned: 0 };
     createBomb();
     betweenWaves = false;
     weapon.reserve = 150;
@@ -456,14 +502,16 @@ function startGame(mode) {
   $('menu').style.display = 'none';
   $('death-screen').style.display = 'none';
   $('hud').style.display = 'block';
-  paused = false;
-  renderer.domElement.requestPointerLock();
+  phase = 'PLAYING';
+  requestLock();
   audio();
 }
 
 function showEndScreen(victory, title, statsHtml) {
   player.alive = false;
-  paused = true;
+  phase = 'RESULTS';
+  endDelay = 0;
+  clearInput();
   document.exitPointerLock();
   $('death-title').textContent = title;
   $('death-screen').classList.toggle('victory', victory);
@@ -474,35 +522,44 @@ function showEndScreen(victory, title, statsHtml) {
 
 function die() {
   const stats = gameMode === 'snd'
-    ? `BAJAS: ${kills} &nbsp;&middot;&nbsp; AGUANTASTE: ${fmtTime((performance.now() - snd.startT) / 1000)}`
+    ? `BAJAS: ${kills} &nbsp;&middot;&nbsp; AGUANTASTE: ${fmtTime(matchTime - snd.startT)}`
     : `OLEADA ALCANZADA: ${wave} &nbsp;&middot;&nbsp; BAJAS: ${kills}`;
   showEndScreen(false, 'K.I.A.', stats);
 }
 
 function showMenuPause() {
-  paused = true;
+  phase = 'PAUSED';
+  clearInput();
+  document.exitPointerLock();
   $('modes').style.display = 'none';
   $('resume-btn').style.display = 'inline-block';
+  $('quit-btn').style.display = 'inline-block';
   $('menu').style.display = 'flex';
   $('hud').style.display = 'none';
 }
 function resumeGame() {
+  if (phase !== 'PAUSED') return;
   $('menu').style.display = 'none';
   $('hud').style.display = 'block';
-  paused = false;
-  renderer.domElement.requestPointerLock();
+  phase = 'PLAYING';
+  requestLock();
 }
 function backToMenu() {
-  paused = true;
+  phase = 'MENU';
   player.alive = false;
+  endDelay = 0;
+  clearInput();
+  document.exitPointerLock();
   clearEnemies();
   resetEffects();
   clearDamageIndicators();
   removeBomb();
   $('death-screen').style.display = 'none';
+  $('wave-summary').style.display = 'none';
   $('hud').style.display = 'none';
   $('modes').style.display = 'flex';
   $('resume-btn').style.display = 'none';
+  $('quit-btn').style.display = 'none';
   $('menu').style.display = 'flex';
 }
 
@@ -510,18 +567,18 @@ $('mode-waves').onclick = () => startGame('waves');
 $('mode-snd').onclick = () => startGame('snd');
 $('retry-btn').onclick = () => startGame(gameMode);
 $('resume-btn').onclick = resumeGame;
+$('quit-btn').onclick = backToMenu;
 $('menu-btn').onclick = backToMenu;
 
 /* ---------------- Bucle principal ---------------- */
 const clock = new THREE.Clock();
 let bobT = 0, shake = 0, hitFlash = 0;
 const tmpV = new THREE.Vector3();
+const MAX_STEP = 0.05, MAX_FRAME = 0.25;
 
-function tick() {
-  requestAnimationFrame(tick);
-  const dt = Math.min(clock.getDelta(), 0.05);
-
-  if (!paused && player.alive) {
+function stepSim(dt) {
+  if (phase === 'PLAYING' && player.alive) {
+    matchTime += dt;
     /* --- movimiento --- */
     const sprint = keys['ShiftLeft'] && !adsDown;
     const speed = sprint ? 8.2 : 5.2;
@@ -675,7 +732,7 @@ function tick() {
           sfxEnemyShot();
           const from = e.group.position.clone().add(new THREE.Vector3(0, 1.4, 0));
           // error de puntería: crece con distancia y con el movimiento del jugador, baja con la dificultad
-          const lvl = gameMode === 'snd' ? Math.min((performance.now() - snd.startT) / 20000, 4) : wave;
+          const lvl = gameMode === 'snd' ? Math.min((matchTime - snd.startT) / 20, 4) : wave;
           const err = Math.max(0.12,
             0.30 + dist * 0.026 + (moving ? 0.45 : 0) + (sprint ? 0.35 : 0) - Math.min(lvl * 0.05, 0.45));
           const aim = new THREE.Vector3(
@@ -735,7 +792,7 @@ function tick() {
         sfxClick(1700, 0.07, 0.03);
         snd.beepT = 0.15 + Math.max(0, snd.timeLeft / SND_DURATION) * 0.85;
       }
-      if (bombLight) bombLight.intensity = Math.sin(performance.now() * 0.02) > 0 ? 3 : 0.4;
+      if (bombLight) bombLight.intensity = Math.sin(matchTime * 20) > 0 ? 3 : 0.4;
 
       // llegada continua de hostiles
       snd.spawnTimer -= dt;
@@ -781,16 +838,48 @@ function tick() {
       }
     }
 
+    updateCorpses(dt);
+    if (endDelay > 0) {
+      endDelay -= dt;
+      if (endDelay <= 0) showEndScreen(true, 'OBJETIVO CUMPLIDO',
+        `BOMBA DETONADA &nbsp;&middot;&nbsp; BAJAS: ${kills}`);
+    }
+
     updateDamageIndicators(dt);
     hitFlash = Math.max(0, hitFlash - dt * 3);
     $('hit-flash').style.opacity = hitFlash * 0.85;
 
     updateHUD();
   }
-
-  updateEffects(dt);
-  renderer.render(scene, camera);
 }
+
+function tick() {
+  requestAnimationFrame(tick);
+  const frameDt = Math.min(clock.getDelta(), MAX_FRAME);
+  if (phase === 'PLAYING') {
+    const steps = Math.max(1, Math.ceil(frameDt / MAX_STEP));
+    for (let i = 0; i < steps; i++) stepSim(frameDt / steps);
+    updateEffects(Math.min(frameDt, MAX_STEP));
+  }
+  renderer.render(scene, camera);
+  diagnostics.frame();
+}
+
+const diagnostics = createDiagnostics(renderer, scene, () => {
+  let alive = 0;
+  for (const e of enemies) if (e.alive) alive++;
+  return { phase, mode: gameMode, enemiesAlive: alive, enemiesTotal: enemies.length, matchTime };
+}, {
+  killPlayer: () => damagePlayer(1e6),
+  killAllEnemies: () => { for (const e of enemies.slice()) if (e.alive) damageEnemy(e, 1e6, e.group.position, Math.random() < 0.5, null); },
+  heal: () => { player.hp = 100; },
+  setSndTime: s => { if (snd) snd.timeLeft = s; },
+  setSndDefuse: s => { if (snd) snd.defuse = s; },
+  startGame,
+  backToMenu,
+  resumeGame,
+  pause: () => { if (phase === 'PLAYING') showMenuPause(); },
+});
 
 applySettings();
 refreshSettingsUI();
