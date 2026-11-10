@@ -8,6 +8,7 @@ import { spawnTracer, spawnBurst, spawnDecal, updateEffects, resetEffects } from
 import { weapon, gunGroup, muzzleFlash, flashSprite, GUN_HIP, GUN_ADS } from './weapon.js';
 import { enemies, makeEnemy, damageEnemy, enemyLOS, clearEnemies, updateCorpses } from './enemies.js';
 import { createDiagnostics } from './diagnostics.js';
+import { lobbyScene, lobbyCamera, updateLobby } from './lobby.js';
 
 /* ---------------- Ajustes: aplicación y UI ---------------- */
 function applySettings() {
@@ -469,6 +470,7 @@ function startGame(mode) {
   $('wave-summary').style.display = 'none';
   $('defuse-panel').style.display = 'none';
   $('quit-btn').style.display = 'none';
+  $('menu').classList.remove('paused');
   resetWaveStats();
 
   player.vel.set(0, 0, 0);
@@ -534,11 +536,13 @@ function showMenuPause() {
   $('modes').style.display = 'none';
   $('resume-btn').style.display = 'inline-block';
   $('quit-btn').style.display = 'inline-block';
+  $('menu').classList.add('paused');
   $('menu').style.display = 'flex';
   $('hud').style.display = 'none';
 }
 function resumeGame() {
   if (phase !== 'PAUSED') return;
+  $('menu').classList.remove('paused');
   $('menu').style.display = 'none';
   $('hud').style.display = 'block';
   phase = 'PLAYING';
@@ -560,6 +564,7 @@ function backToMenu() {
   $('modes').style.display = 'flex';
   $('resume-btn').style.display = 'none';
   $('quit-btn').style.display = 'none';
+  $('menu').classList.remove('paused');
   $('menu').style.display = 'flex';
 }
 
@@ -860,15 +865,24 @@ function tick() {
     const steps = Math.max(1, Math.ceil(frameDt / MAX_STEP));
     for (let i = 0; i < steps; i++) stepSim(frameDt / steps);
     updateEffects(Math.min(frameDt, MAX_STEP));
+    renderer.render(scene, camera);
+  } else if (phase === 'MENU') {
+    updateLobby(frameDt);
+    renderer.render(lobbyScene, lobbyCamera);
+  } else {
+    renderer.render(scene, camera);
   }
-  renderer.render(scene, camera);
   diagnostics.frame();
 }
 
 const diagnostics = createDiagnostics(renderer, scene, () => {
   let alive = 0;
   for (const e of enemies) if (e.alive) alive++;
-  return { phase, mode: gameMode, enemiesAlive: alive, enemiesTotal: enemies.length, matchTime };
+  const activeScene = phase === 'MENU' ? lobbyScene : scene;
+  return {
+    phase, mode: gameMode, enemiesAlive: alive, enemiesTotal: enemies.length, matchTime,
+    sceneChildren: activeScene.children.length,
+  };
 }, {
   killPlayer: () => damagePlayer(1e6),
   killAllEnemies: () => { for (const e of enemies.slice()) if (e.alive) damageEnemy(e, 1e6, e.group.position, Math.random() < 0.5, null); },

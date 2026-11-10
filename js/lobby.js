@@ -1,0 +1,381 @@
+import * as THREE from 'three';
+import { renderer } from './core.js';
+import { texConcrete, texMetal, texCrate } from './textures.js';
+
+export const lobbyScene = new THREE.Scene();
+lobbyScene.background = new THREE.Color(0x060911);
+lobbyScene.fog = new THREE.FogExp2(0x060911, 0.038);
+
+export const lobbyCamera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 0.1, 80);
+lobbyCamera.position.set(0.15, 1.42, 3.4);
+lobbyScene.add(lobbyCamera);
+
+addEventListener('resize', () => {
+  lobbyCamera.aspect = innerWidth / innerHeight;
+  lobbyCamera.updateProjectionMatrix();
+});
+
+const floorTex = texConcrete.clone();
+floorTex.repeat.set(5, 5);
+const matFloor = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.85, metalness: 0.2 });
+
+const wallTex = texMetal.clone();
+wallTex.repeat.set(3, 3);
+const matWall = new THREE.MeshStandardMaterial({ map: wallTex, color: 0x22262c, roughness: 0.72, metalness: 0.48 });
+const matBeam = new THREE.MeshStandardMaterial({ color: 0x17191e, roughness: 0.6, metalness: 0.68 });
+const matPillar = new THREE.MeshStandardMaterial({ color: 0x1f2328, roughness: 0.7, metalness: 0.4 });
+const matHazard = new THREE.MeshStandardMaterial({ color: 0xd99b26, roughness: 0.78, metalness: 0.1 });
+
+const matCrateLobby = new THREE.MeshStandardMaterial({ map: texCrate, roughness: 0.85 });
+const matContainerLobby = new THREE.MeshStandardMaterial({ map: texMetal, color: 0x2b3844, roughness: 0.65, metalness: 0.4 });
+const matBarrelLobby = new THREE.MeshStandardMaterial({ map: texMetal, color: 0x3d4435, roughness: 0.6, metalness: 0.5 });
+
+const matUniform = new THREE.MeshStandardMaterial({ color: 0x262c33, roughness: 0.85 });
+const matVest = new THREE.MeshStandardMaterial({ color: 0x17191d, roughness: 0.9, metalness: 0.1 });
+const matArmor = new THREE.MeshStandardMaterial({ color: 0x2e343b, roughness: 0.65, metalness: 0.35 });
+const matHelmet = new THREE.MeshStandardMaterial({ color: 0x22272e, roughness: 0.6, metalness: 0.3 });
+const matVisor = new THREE.MeshStandardMaterial({ color: 0x11161d, roughness: 0.2, metalness: 0.8, emissive: 0xff3b1a, emissiveIntensity: 0.5 });
+const matSkin = new THREE.MeshStandardMaterial({ color: 0x1e2024, roughness: 0.9 });
+const matGloves = new THREE.MeshStandardMaterial({ color: 0x1b1c1e, roughness: 0.8 });
+const matBoots = new THREE.MeshStandardMaterial({ color: 0x121315, roughness: 0.7, metalness: 0.2 });
+const matGun = new THREE.MeshStandardMaterial({ color: 0x16181b, roughness: 0.5, metalness: 0.75 });
+const matGunMetal = new THREE.MeshStandardMaterial({ color: 0x2d3036, roughness: 0.45, metalness: 0.65 });
+
+lobbyScene.add(new THREE.HemisphereLight(0x28384f, 0x07090e, 0.6));
+
+const keyLight = new THREE.DirectionalLight(0xdbe4f0, 1.45);
+keyLight.position.set(2.4, 4.2, 3.2);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(1024, 1024);
+keyLight.shadow.camera.near = 0.5;
+keyLight.shadow.camera.far = 12;
+keyLight.shadow.camera.left = -3;
+keyLight.shadow.camera.right = 3;
+keyLight.shadow.camera.top = 3;
+keyLight.shadow.camera.bottom = -1;
+keyLight.shadow.bias = -0.001;
+lobbyScene.add(keyLight);
+
+const rimLight = new THREE.PointLight(0x38bdf8, 3.2, 8, 2);
+rimLight.position.set(-1.2, 2.0, -1.8);
+lobbyScene.add(rimLight);
+
+const warmLight = new THREE.PointLight(0xf59e0b, 2.4, 7, 2);
+warmLight.position.set(2.6, 1.2, -1.2);
+lobbyScene.add(warmLight);
+
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 24), matFloor);
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+lobbyScene.add(floor);
+
+const stripe1 = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 14), matHazard);
+stripe1.rotation.x = -Math.PI / 2;
+stripe1.rotation.z = Math.PI / 2;
+stripe1.position.set(0, 0.005, 1.4);
+stripe1.receiveShadow = true;
+lobbyScene.add(stripe1);
+
+const backWall = new THREE.Mesh(new THREE.BoxGeometry(24, 8, 0.4), matWall);
+backWall.position.set(0, 4, -4.5);
+backWall.receiveShadow = true;
+lobbyScene.add(backWall);
+
+const sideWall = new THREE.Mesh(new THREE.BoxGeometry(0.4, 8, 20), matWall);
+sideWall.position.set(-6.5, 4, 0);
+sideWall.receiveShadow = true;
+lobbyScene.add(sideWall);
+
+for (let x = -5.5; x <= 5.5; x += 3.6) {
+  const col = new THREE.Mesh(new THREE.BoxGeometry(0.45, 8, 0.45), matPillar);
+  col.position.set(x, 4, -4.2);
+  col.castShadow = true;
+  col.receiveShadow = true;
+  lobbyScene.add(col);
+}
+
+const beamMain = new THREE.Mesh(new THREE.BoxGeometry(24, 0.55, 0.55), matBeam);
+beamMain.position.set(0, 5.2, -1.5);
+beamMain.castShadow = true;
+lobbyScene.add(beamMain);
+
+const beamCross1 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 12), matBeam);
+beamCross1.position.set(-2.5, 5.0, 0);
+beamCross1.castShadow = true;
+lobbyScene.add(beamCross1);
+
+const beamCross2 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 12), matBeam);
+beamCross2.position.set(2.5, 5.0, 0);
+beamCross2.castShadow = true;
+lobbyScene.add(beamCross2);
+
+const container = new THREE.Mesh(new THREE.BoxGeometry(5.2, 2.6, 2.4), matContainerLobby);
+container.position.set(-3.8, 1.3, -2.8);
+container.rotation.y = 0.16;
+container.castShadow = true;
+container.receiveShadow = true;
+lobbyScene.add(container);
+
+function addCrate(x, y, z, ry, s = 1) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(1.1 * s, 1.1 * s, 1.1 * s), matCrateLobby);
+  m.position.set(x, y + 0.55 * s, z);
+  m.rotation.y = ry;
+  m.castShadow = true;
+  m.receiveShadow = true;
+  lobbyScene.add(m);
+  return m;
+}
+
+addCrate(2.8, 0, -1.2, -0.22);
+addCrate(3.8, 0, -1.5, 0.15);
+addCrate(3.2, 1.1, -1.3, 0.08);
+addCrate(2.1, 0, -2.2, 0.45, 0.85);
+
+const barrelGeo = new THREE.CylinderGeometry(0.4, 0.4, 1.25, 14);
+for (const [bx, bz] of [[-1.6, -2.6], [-1.0, -2.8], [-1.3, -2.0]]) {
+  const b = new THREE.Mesh(barrelGeo, matBarrelLobby);
+  b.position.set(bx, 0.625, bz);
+  b.castShadow = true;
+  b.receiveShadow = true;
+  lobbyScene.add(b);
+}
+
+const operator = new THREE.Group();
+operator.position.set(0.85, 0, 0);
+operator.rotation.y = -0.32;
+lobbyScene.add(operator);
+
+const lBoot = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, 0.32), matBoots);
+lBoot.position.set(-0.16, 0.11, 0.04);
+lBoot.castShadow = true;
+operator.add(lBoot);
+
+const rBoot = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, 0.32), matBoots);
+rBoot.position.set(0.18, 0.11, -0.06);
+rBoot.castShadow = true;
+operator.add(rBoot);
+
+const lShin = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.45, 0.18), matUniform);
+lShin.position.set(-0.16, 0.42, 0.02);
+lShin.castShadow = true;
+operator.add(lShin);
+
+const rShin = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.45, 0.18), matUniform);
+rShin.position.set(0.18, 0.42, -0.05);
+rShin.castShadow = true;
+operator.add(rShin);
+
+const lKnee = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.14, 0.07), matArmor);
+lKnee.position.set(-0.16, 0.46, 0.12);
+lKnee.castShadow = true;
+operator.add(lKnee);
+
+const rKnee = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.14, 0.07), matArmor);
+rKnee.position.set(0.18, 0.46, 0.05);
+rKnee.castShadow = true;
+operator.add(rKnee);
+
+const lThigh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.46, 0.22), matUniform);
+lThigh.position.set(-0.15, 0.82, 0.01);
+lThigh.castShadow = true;
+operator.add(lThigh);
+
+const rThigh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.46, 0.22), matUniform);
+rThigh.position.set(0.17, 0.82, -0.04);
+rThigh.castShadow = true;
+operator.add(rThigh);
+
+const holster = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.22, 0.12), matVest);
+holster.position.set(0.29, 0.84, -0.03);
+holster.castShadow = true;
+operator.add(holster);
+
+const pistol = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.12, 0.18), matGun);
+pistol.position.set(0.3, 0.92, -0.01);
+pistol.rotation.x = -0.2;
+pistol.castShadow = true;
+operator.add(pistol);
+
+const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.18, 0.26), matUniform);
+pelvis.position.set(0.01, 1.05, -0.01);
+pelvis.castShadow = true;
+operator.add(pelvis);
+
+const belt = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.08, 0.29), matVest);
+belt.position.set(0.01, 1.13, -0.01);
+belt.castShadow = true;
+operator.add(belt);
+
+const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.07, 0.03), matArmor);
+buckle.position.set(0.01, 1.13, 0.14);
+operator.add(buckle);
+
+const spineGroup = new THREE.Group();
+spineGroup.position.set(0.01, 1.15, -0.01);
+operator.add(spineGroup);
+
+const abdomen = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.24, 0.25), matUniform);
+abdomen.position.set(0, 0.12, 0);
+abdomen.castShadow = true;
+spineGroup.add(abdomen);
+
+const chestGroup = new THREE.Group();
+chestGroup.position.set(0, 0.24, 0);
+spineGroup.add(chestGroup);
+
+const chest = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.38, 0.28), matVest);
+chest.position.set(0, 0.19, 0);
+chest.castShadow = true;
+chestGroup.add(chest);
+
+const plateFront = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.3, 0.08), matArmor);
+plateFront.position.set(0, 0.19, 0.16);
+plateFront.castShadow = true;
+chestGroup.add(plateFront);
+
+const plateBack = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.3, 0.06), matArmor);
+plateBack.position.set(0, 0.19, -0.15);
+plateBack.castShadow = true;
+chestGroup.add(plateBack);
+
+for (let px = -0.12; px <= 0.12; px += 0.12) {
+  const pouch = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.15, 0.07), matVest);
+  pouch.position.set(px, 0.12, 0.21);
+  pouch.castShadow = true;
+  chestGroup.add(pouch);
+}
+
+const radio = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 0.09), matVest);
+radio.position.set(-0.24, 0.24, 0.08);
+radio.castShadow = true;
+chestGroup.add(radio);
+
+const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.3, 6), matGunMetal);
+antenna.position.set(-0.25, 0.44, 0.08);
+chestGroup.add(antenna);
+
+const headGroup = new THREE.Group();
+headGroup.position.set(0, 0.44, 0);
+chestGroup.add(headGroup);
+
+const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.12, 10), matSkin);
+neck.position.set(0, 0.04, 0);
+neck.castShadow = true;
+headGroup.add(neck);
+
+const head = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.25, 0.23), matSkin);
+head.position.set(0, 0.16, 0.02);
+head.castShadow = true;
+headGroup.add(head);
+
+const helmet = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.18, 0.31), matHelmet);
+helmet.position.set(0, 0.24, 0.02);
+helmet.castShadow = true;
+headGroup.add(helmet);
+
+const nvgMount = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.09, 0.05), matArmor);
+nvgMount.position.set(0, 0.24, 0.18);
+headGroup.add(nvgMount);
+
+const visor = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.08, 0.06), matVisor);
+visor.position.set(0, 0.17, 0.14);
+headGroup.add(visor);
+
+const lShoulder = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.15, 0.18), matArmor);
+lShoulder.position.set(-0.31, 0.3, 0);
+lShoulder.castShadow = true;
+chestGroup.add(lShoulder);
+
+const rShoulder = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.15, 0.18), matArmor);
+rShoulder.position.set(0.31, 0.3, 0);
+rShoulder.castShadow = true;
+chestGroup.add(rShoulder);
+
+const lArmUpper = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.32, 0.16), matUniform);
+lArmUpper.position.set(-0.31, 0.1, 0.04);
+lArmUpper.rotation.x = -0.35;
+lArmUpper.rotation.z = 0.12;
+lArmUpper.castShadow = true;
+chestGroup.add(lArmUpper);
+
+const rArmUpper = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.32, 0.16), matUniform);
+rArmUpper.position.set(0.31, 0.1, 0.03);
+rArmUpper.rotation.x = -0.42;
+rArmUpper.rotation.z = -0.15;
+rArmUpper.castShadow = true;
+chestGroup.add(rArmUpper);
+
+const lArmFore = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.34, 0.14), matUniform);
+lArmFore.position.set(-0.25, -0.06, 0.22);
+lArmFore.rotation.x = -1.1;
+lArmFore.rotation.y = 0.45;
+lArmFore.castShadow = true;
+chestGroup.add(lArmFore);
+
+const rArmFore = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.34, 0.14), matUniform);
+rArmFore.position.set(0.23, -0.04, 0.2);
+rArmFore.rotation.x = -1.0;
+rArmFore.rotation.y = -0.4;
+rArmFore.castShadow = true;
+chestGroup.add(rArmFore);
+
+const lGlove = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.16, 0.12), matGloves);
+lGlove.position.set(-0.16, -0.15, 0.38);
+lGlove.rotation.x = -0.9;
+lGlove.rotation.y = 0.4;
+lGlove.castShadow = true;
+chestGroup.add(lGlove);
+
+const rGlove = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.16, 0.12), matGloves);
+rGlove.position.set(0.12, -0.14, 0.33);
+rGlove.rotation.x = -0.9;
+rGlove.rotation.y = -0.4;
+rGlove.castShadow = true;
+chestGroup.add(rGlove);
+
+const weaponGroup = new THREE.Group();
+weaponGroup.position.set(0.04, -0.02, 0.36);
+weaponGroup.rotation.set(-0.45, 0.32, -0.38);
+chestGroup.add(weaponGroup);
+
+const gunReceiver = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.14, 0.52), matGun);
+gunReceiver.castShadow = true;
+weaponGroup.add(gunReceiver);
+
+const gunBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.44, 10), matGunMetal);
+gunBarrel.rotation.x = Math.PI / 2;
+gunBarrel.position.set(0, 0.015, 0.46);
+gunBarrel.castShadow = true;
+weaponGroup.add(gunBarrel);
+
+const gunSight = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.14), matGunMetal);
+gunSight.position.set(0, 0.1, 0.02);
+weaponGroup.add(gunSight);
+
+const gunMag = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.12), matGun);
+gunMag.position.set(0, -0.14, 0.06);
+gunMag.rotation.x = -0.22;
+gunMag.castShadow = true;
+weaponGroup.add(gunMag);
+
+const gunStock = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.12, 0.26), matVest);
+gunStock.position.set(0, -0.01, -0.32);
+gunStock.castShadow = true;
+weaponGroup.add(gunStock);
+
+let idleTime = 0;
+const targetLook = new THREE.Vector3(0.55, 1.15, 0);
+
+export function updateLobby(dt) {
+  idleTime += dt;
+
+  chestGroup.position.y = 0.24 + Math.sin(idleTime * 1.8) * 0.007;
+  chestGroup.rotation.x = Math.sin(idleTime * 1.8) * 0.006;
+  headGroup.rotation.y = Math.sin(idleTime * 0.5) * 0.04;
+  headGroup.rotation.x = Math.cos(idleTime * 0.7) * 0.015;
+  weaponGroup.position.y = -0.02 + Math.sin(idleTime * 1.8 + 0.3) * 0.005;
+
+  lobbyCamera.position.x = 0.15 + Math.sin(idleTime * 0.35) * 0.045;
+  lobbyCamera.position.y = 1.42 + Math.cos(idleTime * 0.45) * 0.025;
+  lobbyCamera.lookAt(targetLook);
+}

@@ -18,7 +18,7 @@ export function createDiagnostics(renderer, scene, getState, actions = {}) {
       calls: i.render.calls, triangles: i.render.triangles,
       geometries: i.memory.geometries, textures: i.memory.textures,
       programs: i.programs ? i.programs.length : 0,
-      sceneChildren: scene.children.length,
+      sceneChildren: s.sceneChildren !== undefined ? s.sceneChildren : scene.children.length,
       enemiesAlive: s.enemiesAlive, enemiesTotal: s.enemiesTotal,
       phase: s.phase, mode: s.mode, matchTime: +s.matchTime.toFixed(2),
       peakCalls, peakTris, peakGeos, peakTex,
