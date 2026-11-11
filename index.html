@@ -102,8 +102,14 @@
       <button class="nav-tab" data-tab="settings">AJUSTES</button>
     </nav>
     <div id="player-badge">
-      <span class="badge-role">// OPERADOR LOCAL</span>
-      <span class="badge-status">&bull; EN ESPERA</span>
+      <div class="player-rank-row">
+        <span class="badge-role">// OPERADOR LOCAL</span>
+        <span class="badge-level" id="player-level-badge">NVL 1</span>
+      </div>
+      <div class="player-xp-bar-wrap">
+        <div class="player-xp-track"><div class="player-xp-fill" id="player-xp-fill" style="width:0%"></div></div>
+        <span class="player-xp-text" id="player-xp-text">0 / 500 XP</span>
+      </div>
     </div>
   </header>
 
@@ -166,42 +172,66 @@
   </div>
 
   <div id="tab-loadout" class="lobby-view" style="display:none">
-    <div class="dossier-panel">
-      <div class="intel-tag">// ARSENAL T&Aacute;CTICO &bull; ARMA REGLAMENTARIA</div>
-      <h2>MK-7 CARBINE</h2>
-      <div class="intel-badge">FUSIL DE ASALTO 5.56&times;45mm NATO</div>
-      <p>Plataforma de asalto configurada para combate nocturno a media y corta distancia. Equilibrada para tiro r&aacute;pido con retroceso predecible y alta precisi&oacute;n en ADS.</p>
-      <div class="weapon-bars">
-        <div class="wbar-row">
-          <span>DA&Ntilde;O</span>
-          <div class="wbar-track"><div class="wbar-fill" style="width:68%"></div></div>
-          <b>34</b>
+    <div class="dossier-panel loadout-panel">
+      <div class="intel-tag">// ARSENAL T&Aacute;CTICO &bull; ARMAMENTO Y PROGRESI&Oacute;N</div>
+      
+      <div class="armory-cat-nav" id="armory-cat-nav"></div>
+
+      <div class="armory-weapon-strip" id="armory-weapon-strip"></div>
+
+      <div class="armory-weapon-detail" id="armory-weapon-detail">
+        <div class="armory-header-row">
+          <div>
+            <h2 id="loadout-weapon-name">MK-7 CARBINE</h2>
+            <div class="intel-badge" id="loadout-weapon-type">FUSIL DE ASALTO 5.56&times;45mm NATO</div>
+          </div>
+          <div class="armory-level-chip" id="loadout-weapon-level">NVL 1/20</div>
         </div>
-        <div class="wbar-row">
-          <span>CADENCIA</span>
-          <div class="wbar-track"><div class="wbar-fill" style="width:82%"></div></div>
-          <b>570 RPM</b>
+
+        <div class="armory-xp-box">
+          <div class="armory-xp-labels">
+            <span class="armory-xp-title">PROGRESO DE ARMA</span>
+            <span class="armory-xp-val" id="loadout-weapon-xp-text">0 / 250 XP</span>
+          </div>
+          <div class="wbar-track armory-xp-track">
+            <div class="wbar-fill armory-xp-fill" id="loadout-weapon-xp-fill" style="width:0%"></div>
+          </div>
         </div>
-        <div class="wbar-row">
-          <span>PRECISI&Oacute;N (ADS)</span>
-          <div class="wbar-track"><div class="wbar-fill" style="width:85%"></div></div>
-          <b>85%</b>
+
+        <p id="loadout-weapon-desc">Plataforma t&aacute;ctica 5.56&times;45mm NATO. Balance &oacute;ptimo entre cadencia y control de retroceso.</p>
+
+        <div class="weapon-bars" id="loadout-weapon-bars">
+          <div class="wbar-row">
+            <span>DA&Ntilde;O</span>
+            <div class="wbar-track"><div class="wbar-fill" id="bar-dmg" style="width:68%"></div></div>
+            <b id="val-dmg">34</b>
+          </div>
+          <div class="wbar-row">
+            <span>CADENCIA</span>
+            <div class="wbar-track"><div class="wbar-fill" id="bar-rpm" style="width:82%"></div></div>
+            <b id="val-rpm">570 RPM</b>
+          </div>
+          <div class="wbar-row">
+            <span>PRECISI&Oacute;N (ADS)</span>
+            <div class="wbar-track"><div class="wbar-fill" id="bar-ads" style="width:85%"></div></div>
+            <b id="val-ads">85%</b>
+          </div>
+          <div class="wbar-row">
+            <span>MOVILIDAD</span>
+            <div class="wbar-track"><div class="wbar-fill" id="bar-mob" style="width:78%"></div></div>
+            <b id="val-mob">78%</b>
+          </div>
+          <div class="wbar-row">
+            <span>CARGADOR</span>
+            <div class="wbar-track"><div class="wbar-fill" id="bar-mag" style="width:60%"></div></div>
+            <b id="val-mag">30 / 120</b>
+          </div>
         </div>
-        <div class="wbar-row">
-          <span>MOVILIDAD</span>
-          <div class="wbar-track"><div class="wbar-fill" style="width:78%"></div></div>
-          <b>78%</b>
+
+        <div class="armory-action-bar">
+          <button class="btn-armory" id="btn-equip-weapon">EQUIPADA</button>
+          <div class="armory-status-tag" id="loadout-status-tag">EN SERVICIO</div>
         </div>
-        <div class="wbar-row">
-          <span>CARGADOR</span>
-          <div class="wbar-track"><div class="wbar-fill" style="width:60%"></div></div>
-          <b>30 / 120</b>
-        </div>
-      </div>
-      <div class="intel-stats" style="margin-top:16px">
-        <div class="param-row"><span>CA&Ntilde;&Oacute;N</span><b>14.5" CON BOCACHA APAGALLAMAS</b></div>
-        <div class="param-row"><span>&Oacute;PTICA</span><b>MIRA R&Eacute;FLEX MILITAR DE PUNTO ROJO</b></div>
-        <div class="param-row"><span>CULATA</span><b>T&Aacute;CTICA ALIGERADA</b></div>
       </div>
     </div>
   </div>

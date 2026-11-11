@@ -9,6 +9,7 @@ import { weapon, gunGroup, muzzleFlash, flashSprite, GUN_HIP, GUN_ADS } from './
 import { enemies, makeEnemy, damageEnemy, enemyLOS, clearEnemies, updateCorpses } from './enemies.js';
 import { createDiagnostics } from './diagnostics.js';
 import { lobbyScene, lobbyCamera, updateLobby, setLobbyView, setOperatorCamo } from './lobby.js';
+import { progression, WEAPON_CATEGORIES } from './progression.js';
 
 /* ---------------- Ajustes: aplicación y UI ---------------- */
 function applySettings() {
@@ -54,6 +55,163 @@ $('set-volume').oninput = e => {
   sfxClick(1200, 0.12, 0.04);
 };
 
+let activeArmoryCat = 'ASSAULT';
+let activeInspectedWeaponId = 'mk7';
+
+function updatePlayerHeaderUI() {
+  const pInfo = progression.getPlayerInfo();
+  const lvlEl = $('player-level-badge');
+  const fillEl = $('player-xp-fill');
+  const txtEl = $('player-xp-text');
+  if (lvlEl) lvlEl.textContent = 'NVL ' + pInfo.level;
+  if (fillEl) fillEl.style.width = Math.round(pInfo.progress * 100) + '%';
+  if (txtEl) {
+    txtEl.textContent = pInfo.isMax ? 'MÁXIMO' : `${pInfo.levelXP} / ${pInfo.nextLevelXP} XP`;
+  }
+}
+
+function initArmoryUI() {
+  const catNav = $('armory-cat-nav');
+  if (!catNav) return;
+  catNav.innerHTML = '';
+  WEAPON_CATEGORIES.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = 'armory-cat-btn' + (cat.id === activeArmoryCat ? ' active' : '');
+    btn.dataset.cat = cat.id;
+    btn.textContent = cat.name;
+    btn.onclick = () => {
+      activeArmoryCat = cat.id;
+      document.querySelectorAll('.armory-cat-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.cat === activeArmoryCat);
+      });
+      renderArmoryWeapons();
+    };
+    catNav.appendChild(btn);
+  });
+  renderArmoryWeapons();
+}
+
+function renderArmoryWeapons() {
+  const strip = $('armory-weapon-strip');
+  if (!strip) return;
+  strip.innerHTML = '';
+  const catalog = progression.getCatalogWithStatus();
+  const filtered = catalog.filter(w => w.category === activeArmoryCat);
+  if (!filtered.some(w => w.id === activeInspectedWeaponId)) {
+    if (filtered.length > 0) activeInspectedWeaponId = filtered[0].id;
+  }
+  filtered.forEach(w => {
+    const card = document.createElement('div');
+    card.className = 'weapon-card' + (w.id === activeInspectedWeaponId ? ' selected' : '');
+    card.dataset.id = w.id;
+
+    let statusClass = 'status-planned';
+    let statusLabel = 'PRÓXIMO';
+    if (w.isSelected) {
+      statusClass = 'status-equipped';
+      statusLabel = 'EQUIPADA';
+    } else if (w.status === 'UNLOCKED') {
+      statusClass = 'status-unlocked';
+      statusLabel = 'DESBLOQ';
+    } else if (w.status === 'LOCKED') {
+      statusClass = 'status-locked';
+      statusLabel = 'NVL ' + w.reqLevel;
+    }
+
+    card.innerHTML = `
+      <div class="wc-name">${w.name}</div>
+      <div class="wc-badge-row">
+        <span class="wc-lvl">NVL ${w.levelInfo.level}</span>
+        <span class="wc-status ${statusClass}">${statusLabel}</span>
+      </div>
+    `;
+    card.onclick = () => {
+      activeInspectedWeaponId = w.id;
+      document.querySelectorAll('.weapon-card').forEach(c => {
+        c.classList.toggle('selected', c.dataset.id === activeInspectedWeaponId);
+      });
+      renderInspectedWeapon();
+    };
+    strip.appendChild(card);
+  });
+  renderInspectedWeapon();
+}
+
+function renderInspectedWeapon() {
+  const catalog = progression.getCatalogWithStatus();
+  const w = catalog.find(x => x.id === activeInspectedWeaponId) || catalog[0];
+  if (!w) return;
+
+  const nameEl = $('loadout-weapon-name');
+  const typeEl = $('loadout-weapon-type');
+  const lvlEl = $('loadout-weapon-level');
+  const xpFill = $('loadout-weapon-xp-fill');
+  const xpTxt = $('loadout-weapon-xp-text');
+  const descEl = $('loadout-weapon-desc');
+  const btnEquip = $('btn-equip-weapon');
+  const statusTag = $('loadout-status-tag');
+
+  if (nameEl) nameEl.textContent = w.name;
+  if (typeEl) {
+    const cat = WEAPON_CATEGORIES.find(c => c.id === w.category);
+    typeEl.textContent = (cat ? cat.name : w.category) + (w.stats ? ' • 5.56 NATO' : ' • CLASIFICADO');
+  }
+  if (lvlEl) lvlEl.textContent = `NVL ${w.levelInfo.level}/${w.maxLevel}`;
+  if (xpFill) xpFill.style.width = Math.round(w.levelInfo.progress * 100) + '%';
+  if (xpTxt) {
+    xpTxt.textContent = w.levelInfo.isMax ? 'MÁXIMO' : `${w.levelInfo.levelXP} / ${w.levelInfo.nextLevelXP} XP`;
+  }
+  if (descEl) descEl.textContent = w.desc;
+
+  if (w.stats) {
+    $('bar-dmg').style.width = Math.round(w.stats.damage / 50 * 100) + '%';
+    $('val-dmg').textContent = w.stats.damage;
+    $('bar-rpm').style.width = Math.round(w.stats.rpm / 800 * 100) + '%';
+    $('val-rpm').textContent = w.stats.rpm + ' RPM';
+    $('bar-ads').style.width = w.stats.ads + '%';
+    $('val-ads').textContent = w.stats.ads + '%';
+    $('bar-mob').style.width = w.stats.mobility + '%';
+    $('val-mob').textContent = w.stats.mobility + '%';
+    $('bar-mag').style.width = Math.round(w.stats.mag / 50 * 100) + '%';
+    $('val-mag').textContent = w.stats.mag + ' / 120';
+  } else {
+    $('bar-dmg').style.width = '0%'; $('val-dmg').textContent = '--';
+    $('bar-rpm').style.width = '0%'; $('val-rpm').textContent = '--';
+    $('bar-ads').style.width = '0%'; $('val-ads').textContent = '--';
+    $('bar-mob').style.width = '0%'; $('val-mob').textContent = '--';
+    $('bar-mag').style.width = '0%'; $('val-mag').textContent = '--';
+  }
+
+  if (btnEquip && statusTag) {
+    btnEquip.onclick = null;
+    if (w.isSelected) {
+      btnEquip.textContent = 'EQUIPADA';
+      btnEquip.className = 'btn-armory equipped';
+      btnEquip.disabled = true;
+      statusTag.textContent = 'EN SERVICIO';
+    } else if (w.status === 'UNLOCKED') {
+      btnEquip.textContent = 'EQUIPAR';
+      btnEquip.className = 'btn-armory';
+      btnEquip.disabled = false;
+      statusTag.textContent = 'LISTA';
+      btnEquip.onclick = () => {
+        progression.selectWeapon(w.id);
+        renderArmoryWeapons();
+      };
+    } else if (w.status === 'LOCKED') {
+      btnEquip.textContent = 'BLOQUEADA';
+      btnEquip.className = 'btn-armory';
+      btnEquip.disabled = true;
+      statusTag.textContent = `REQUIERE NVL ${w.reqLevel}`;
+    } else {
+      btnEquip.textContent = 'EN DESARROLLO';
+      btnEquip.className = 'btn-armory';
+      btnEquip.disabled = true;
+      statusTag.textContent = `DESBLOQUEO NVL ${w.reqLevel}`;
+    }
+  }
+}
+
 let currentTab = 'play';
 const TABS = ['play', 'operator', 'loadout', 'settings'];
 
@@ -78,6 +236,10 @@ function switchTab(tab) {
     view.classList.add('active');
   }
   setLobbyView(tab);
+  if (tab === 'loadout') {
+    renderArmoryWeapons();
+    renderInspectedWeapon();
+  }
 }
 
 let selectedMode = 'waves';
@@ -337,6 +499,12 @@ function shoot() {
         kills++; $('kills').textContent = kills;
         waveStats.kills++;
         if (headshot) { waveStats.headshots++; showHeadshotBanner(); }
+        const curWeapon = progression.getState().selectedWeapon || 'mk7';
+        const kRes = progression.recordKill(curWeapon, headshot);
+        updatePlayerHeaderUI();
+        if (kRes && kRes.playerResult) {
+          flashMsg(headshot ? `+${kRes.playerResult.xpGained} XP (HEADSHOT)` : `+${kRes.playerResult.xpGained} XP`);
+        }
       }
       showHitmarker(headshot);
     }
@@ -432,7 +600,8 @@ function detonateBomb() {
   sfxExplosion();
   shake = 1;
   hitFlash = 0.8;
-  // los hostiles en el radio de la explosión caen
+  progression.recordSndVictory();
+  updatePlayerHeaderUI();
   for (const e of enemies) {
     if (e.alive && e.group.position.distanceTo(bombPos) < 30) { e.alive = false; e.deathT = 0; }
   }
@@ -467,6 +636,8 @@ function showWaveSummary() {
   phase = 'SUMMARY';
   clearInput();
   document.exitPointerLock();
+  progression.recordWaveCleared(wave);
+  updatePlayerHeaderUI();
   const secs = Math.round(matchTime - waveStartT);
   const acc = waveStats.shots ? Math.round(waveStats.hits / waveStats.shots * 100) : 0;
   $('ws-title').textContent = 'OLEADA ' + wave + ' SUPERADA';
@@ -477,6 +648,7 @@ function showWaveSummary() {
   $('ws-dmg-dealt').textContent = waveStats.dealt;
   $('ws-dmg-taken').textContent = waveStats.taken;
   $('ws-time').textContent = secs + 's';
+  $('ws-reward').textContent = '+60 MUNICIÓN \u00A0\u00B7\u00A0 +35 SALUD \u00A0\u00B7\u00A0 +250 XP';
   $('hud').style.display = 'none';
   $('wave-summary').style.display = 'flex';
 }
@@ -661,6 +833,9 @@ function backToMenu() {
   $('modes').style.display = 'flex';
   switchTab('play');
   selectMode(selectedMode || 'waves');
+  updatePlayerHeaderUI();
+  renderArmoryWeapons();
+  renderInspectedWeapon();
   $('menu').style.display = 'flex';
 }
 
@@ -1006,9 +1181,22 @@ const diagnostics = createDiagnostics(renderer, scene, () => {
   pause: () => { if (phase === 'PLAYING') showMenuPause(); },
   switchTab,
   selectMode,
+  progression,
 });
+
+window.__bp = window.__bp || {};
+window.__bp.progression = progression;
 
 applySettings();
 refreshSettingsUI();
+initArmoryUI();
+updatePlayerHeaderUI();
+progression.subscribe(() => {
+  updatePlayerHeaderUI();
+  if (currentTab === 'loadout') {
+    renderArmoryWeapons();
+    renderInspectedWeapon();
+  }
+});
 $('loading').style.display = 'none';
 tick();
