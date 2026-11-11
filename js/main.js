@@ -479,7 +479,7 @@ function shoot() {
   if (weapon.ammo <= 0) { sfxClick(500, .1, .06); weapon.cooldown = 0.25; return; }
   weapon.ammo--;
   waveStats.shots++;
-  weapon.cooldown = weapon.fireRate;
+  weapon.cooldown = Math.max(0, weapon.cooldown <= 0 ? weapon.cooldown + weapon.fireRate : weapon.fireRate);
   weapon.recoil = Math.min(weapon.recoil + (weapon.recoilKick || 1.0), weapon.recoilMax || 6.0);
   flashTimer = 0.045;
   if (weapon.audio && weapon.audio.shot) {
@@ -882,6 +882,7 @@ function showMenuPause() {
 }
 function resumeGame() {
   if (phase !== 'PAUSED') return;
+  weapon.cooldown = Math.max(0, weapon.cooldown);
   $('menu').classList.remove('paused');
   $('pause-box').style.display = 'none';
   $('resume-btn').style.display = 'none';
@@ -979,6 +980,11 @@ function stepSim(dt) {
     camera.updateProjectionMatrix();
 
     weapon.cooldown -= dt;
+    if (!mouseDown && weapon.cooldown < 0) {
+      weapon.cooldown = 0;
+    } else if (weapon.cooldown < -weapon.fireRate) {
+      weapon.cooldown = -weapon.fireRate;
+    }
     if (mouseDown && weapon.cooldown <= 0) {
       if (!weapon.reloading || (weapon.reloadType === 'shell' && weapon.ammo > 0)) {
         shoot();

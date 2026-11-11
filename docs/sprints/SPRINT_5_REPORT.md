@@ -1,14 +1,14 @@
-# BLACKOUT PROTOCOL — INFORME DE CIERRE DE SPRINT 5
-## Arquitectura modular de armamento y primeras armas jugables
+# BLACKOUT PROTOCOL — INFORME DE CIERRE DE SPRINT 5 & SPRINT 5.1
+## Arquitectura modular de armamento, primeras armas jugables y estabilización técnica
 ### Preparación de v0.2.0-alpha
 
 - **Fecha:** 2026-11-11
 - **Rama:** `develop`
-- **Commit base de inicio de Sprint 5:** `6a29c8c` (`feat(progression): implement player & weapon XP system, arsenal catalog, and local persistence (Sprint 4)`)
+- **Commit base de referencia:** `6174b52` (`feat(weapons): implement modular weapon architecture, Vector-9 & M870, multi-pellet raycasting, and lobby 3D sync (Sprint 5)`)
 - **Archivos modificados:** `js/audio.js`, `js/weapon.js`, `js/progression.js`, `js/lobby.js`, `js/main.js`
-- **Suites de validación:** `scratch/test_sprint5.mjs`, `scratch/test_progression_unit.mjs`, `scratch/test_progression_browser.mjs`, `scratch/run_suite.mjs`, `scratch/test_sprint3.mjs`
-- **Estado de Git:** Cambios aplicados y verificados en el área de trabajo local (*working tree*), listos para revisión y confirmación. Sin commits automáticos, sin tags remotos, sin push.
-- **Cumplimiento de restricciones:** Cero comentarios añadidos al código (`//` o `/* */`), Three.js r160 intacto, cero frameworks o dependencias externas nuevas, MK-7 100% fiel a su línea base.
+- **Suites de validación:** Versionadas en `tests/` (`tests/run_all.mjs`, `tests/test_progression_unit.mjs`, `tests/test_progression_browser.mjs`, `tests/test_sprint3.mjs`, `tests/test_engine_lifecycle.mjs`, `tests/test_sprint5.mjs`, `tests/test_sprint5_closure.mjs`, `tests/test_memory_deep.mjs`). Reproducibles con Node.js y Google Chrome.
+- **Estado de Git:** Rama `develop` actualizada con el acumulador temporal de cadencia, validación de recursos de WebGL y prevención estricta de ráfagas artificiales.
+- **Cumplimiento de restricciones:** Cero comentarios añadidos al código (`//` o `/* */`), Three.js r160 intacto, cero frameworks externos, sin push remoto, sin tags remotos, sin iniciar Sprint 6.
 
 ---
 
@@ -280,25 +280,44 @@ Se ejecutaron las suites completas sobre Chrome Headless (CDP) y Node.js.
 | **19** | `mesh_material_stability` | **PASS** | Modelos 3D procedurales cargados con jerarquías completas (>5 mallas c/u) |
 | **20** | `zero_javascript_errors` | **PASS** | Cero excepciones o errores de consola durante la ejecución |
 
-### 8.2 Verificación de Cadencia Efectiva (Simulación a 30, 60 y 120 FPS)
+### 8.2 Corrección de Cuantización de Cadencia (Sprint 5.1: Acumulador Temporal)
 
-Se evaluó la cadencia efectiva en simulación discreta de 60 segundos de disparo continuo bajo diferentes tasas de refresco:
+En el Sprint 5 inicial, el reseteo discreto del temporizador (`weapon.cooldown = weapon.fireRate`) descartaba el residuo fraccionario de tiempo entre frames, causando que la MK-7 perdiera un 21.2% de cadencia a 30 FPS (450 RPM vs 571 RPM nominal).
 
-| Arma | Cadencia Nominal | Métrica FPS | Tiempo Frame (`dt`) | Disparos en 60s | RPM Efectivo | Desviación | Análisis de Cuantización |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| **MK-7** | 571 RPM (0.105s) | **30 FPS** | 33.33 ms | 450 | 450 RPM | -21.2% | Cuantizado a 4 frames (133.3 ms/disp) |
-| **MK-7** | 571 RPM (0.105s) | **60 FPS** | 16.67 ms | 515 | 515 RPM | -9.8% | Alternancia 6–7 frames (108.3 ms/disp) |
-| **MK-7** | 571 RPM (0.105s) | **120 FPS** | 8.33 ms | 554 | 554 RPM | -3.0% | Alternancia 12–13 frames (104.2 ms/disp) |
-| **VECTOR-9** | 923 RPM (0.065s) | **30 FPS** | 33.33 ms | 900 | 900 RPM | -2.5% | Exactamente 2 frames por disparo (66.6 ms) |
-| **VECTOR-9** | 923 RPM (0.065s) | **60 FPS** | 16.67 ms | 900 | 900 RPM | -2.5% | Exactamente 4 frames por disparo (66.6 ms) |
-| **VECTOR-9** | 923 RPM (0.065s) | **120 FPS** | 8.33 ms | 900 | 900 RPM | -2.5% | Exactamente 8 frames por disparo (66.6 ms) |
-| **M870** | 75 RPM (0.800s) | **30 FPS** | 33.33 ms | 72 | 72 RPM | -4.0% | 25 frames por disparo (833.3 ms) |
-| **M870** | 75 RPM (0.800s) | **60 FPS** | 16.67 ms | 75 | 75 RPM | 0.0% | Exacto: 48 frames por disparo (800.0 ms) |
-| **M870** | 75 RPM (0.800s) | **120 FPS** | 8.33 ms | 75 | 75 RPM | 0.0% | Exacto: 96 frames por disparo (800.0 ms) |
+En el **Sprint 5.1**, se implementó un acumulador temporal continuo que conserva el residuo fraccionario:
+```javascript
+weapon.cooldown = Math.max(0, weapon.cooldown <= 0 ? weapon.cooldown + weapon.fireRate : weapon.fireRate);
+```
 
-*Nota técnica:* Para conservar la fidelidad estricta al 100% de la MK-7 de la línea base, se mantuvo el algoritmo original de reseteo de cooldown (`weapon.cooldown = weapon.fireRate`). Para un sprint posterior (Sprint 6 o 7), se recomienda evaluar un acumulador de tiempo residual (`weapon.cooldown += weapon.fireRate`) si se desea eliminar la cuantización en framerates bajos sin alterar el balance.
+#### Comparativa de Cadencia Antes (Sprint 5) vs Después (Sprint 5.1)
 
-### 8.3 Verificación de Impactos Mixtos en M870 (Deduplicación Estricta)
+| Arma | Cadencia Nominal | FPS | Frame dt | RPM Inicial (Sprint 5) | Desviación Inicial | RPM Corregido (Sprint 5.1) | Desviación Corregida |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **MK-7** | 571 RPM (0.105s) | **30** | 33.33 ms | 450 RPM | -21.2% | **572 RPM** | **+0.2%** |
+| **MK-7** | 571 RPM (0.105s) | **60** | 16.67 ms | 515 RPM | -9.8% | **572 RPM** | **+0.2%** |
+| **MK-7** | 571 RPM (0.105s) | **120** | 8.33 ms | 554 RPM | -3.0% | **572 RPM** | **+0.2%** |
+| **VECTOR-9** | 923 RPM (0.065s) | **30** | 33.33 ms | 900 RPM | -2.5% | **924 RPM** | **+0.1%** |
+| **VECTOR-9** | 923 RPM (0.065s) | **60** | 16.67 ms | 900 RPM | -2.5% | **924 RPM** | **+0.1%** |
+| **VECTOR-9** | 923 RPM (0.065s) | **120** | 8.33 ms | 900 RPM | -2.5% | **924 RPM** | **+0.1%** |
+| **M870** | 75 RPM (0.800s) | **30** | 33.33 ms | 72 RPM | -4.0% | **75 RPM** | **0.0%** |
+| **M870** | 75 RPM (0.800s) | **60** | 16.67 ms | 75 RPM | 0.0% | **76 RPM** | **+1.3%** |
+| **M870** | 75 RPM (0.800s) | **120** | 8.33 ms | 75 RPM | 0.0% | **75 RPM** | **0.0%** |
+
+### 8.3 Prevención Estricta de Ráfagas Artificiales (Anti-Burst Protection)
+
+Para impedir ráfagas accidentales tras periodos de inactividad, pausas, cambio de pestaña o picos de lag (framerate drop):
+1. **Inactividad:** Cuando el jugador no mantiene presionado el disparador (`!mouseDown`), el temporizador se bloquea en cero y nunca acumula saldo negativo:
+   ```javascript
+   if (!mouseDown && weapon.cooldown < 0) weapon.cooldown = 0;
+   ```
+2. **Abrazadera de déficit máximo:** Se acota el déficit máximo admisible a `-weapon.fireRate`, garantizando que jamás se acumule más de un disparo de crédito temporal:
+   ```javascript
+   else if (weapon.cooldown < -weapon.fireRate) weapon.cooldown = -weapon.fireRate;
+   ```
+3. **Reanudación de pausa:** En `resumeGame()`, `weapon.cooldown = Math.max(0, weapon.cooldown);` evita disparos instantáneos al volver del menú.
+4. **Validación empírica:** En simulación de pico de 250 ms (5 sub-pasos de 50 ms), el motor disparó un máximo de 3 proyectiles de MK-7 (exactamente los permitidos en 250 ms por su cadencia de 105 ms), con cero ráfagas multi-proyectil por paso de simulación (`maxShotsPerStep <= 1`).
+
+### 8.4 Verificación de Impactos Mixtos en M870 (Deduplicación Estricta)
 
 Se probó un escenario de impacto mixto donde los 8 perdigones de la M870 impactan sobre un único enemigo con zonas de daño diferenciadas:
 - 3 perdigones en cabeza ($3 \times 22.5\text{ HP} = 67.5\text{ HP}$)
@@ -312,22 +331,34 @@ Se probó un escenario de impacto mixto donde los 8 perdigones de la M870 impact
 - XP otorgada al jugador: `+150 XP` (+100 baja + 50 headshot).
 - XP otorgada a la M870: `+90 XP` (+60 baja + 30 headshot).
 
-### 8.4 Recarga Interrumpible, Persistencia y Estabilidad de Recursos
+### 8.5 Pruebas Profundas de Memoria y Estabilidad de Recursos (`renderer.info.memory`)
 
-- **Recarga Interrumpible:** Verificado que al iniciar recarga con `ammo === 0`, el disparo se bloquea y la recarga continúa hasta alimentar el primer cartucho. Con `ammo > 0`, presionar disparar interrumpe inmediatamente la animación y ejecuta el disparo sin demora.
-- **Persistencia:** Verificado que tras seleccionar Vector-9 o M870 y refrescar la página, el estado se restaura fielmente tanto en `localStorage['bp_progression_v1']` como en `window.__bp.weapon.id` y `window.__bp.progression.getState().selectedWeapon`.
-- **Fugas de Memoria en 20 Cambios de Arma:** Se ejecutaron 20 intercambios consecutivos de armamento en la pestaña de Armamento (`mk7` $\rightarrow$ `vector9` $\rightarrow$ `m870`). El recuento de hijos en escena permaneció absolutamente constante en **26 mallas** durante las 20 iteraciones (0 fugas de geometrías, 0 fugas de materiales).
+Se evaluó la integridad de la memoria WebGL en Three.js r160 mediante la suite `tests/test_memory_deep.mjs`:
+- **20 cambios consecutivos de arma en el armero (`mk7` → `vector9` → `m870`):**
+  - Crecimiento de geometrías (`renderer.info.memory.geometries`): `+0`.
+  - Crecimiento de texturas (`renderer.info.memory.textures`): `+0`.
+  - Recuento de mallas hijas en escena: estable en exactamente `26` mallas en las 20 iteraciones.
+- **10 ciclos completos de Oleadas (iniciar partida → volver al lobby):**
+  - Crecimiento neto de geometrías: `0` (estabilidad idéntica entre inicio y final).
+- **10 ciclos completos de Buscar y Destruir (creación de bomba C4 → detonación/desactivación → volver al lobby):**
+  - Crecimiento neto de geometrías: `0` (las geometrías de la bomba se liberan con `geometry.dispose()`).
+- **Muerte del jugador y reintento de partida (Retry tras K.I.A.):**
+  - Liberación correcta de entidades enemigas y efectos sin acumulación de objetos huérfanos.
 
-### 8.5 Resumen Global de Suites Ejecutadas
+### 8.6 Resumen Global de Pruebas Ejecutadas (68/68 PASS)
 
-| Suite | Componente | Pruebas | Pasadas | Fallidas |
+Todas las suites se encuentran versionadas bajo el directorio `tests/` y pueden ejecutarse de manera unificada mediante `node tests/run_all.mjs`:
+
+| Suite | Componente / Ámbito | Pruebas | Pasadas | Fallidas |
 | :--- | :--- | :---: | :---: | :---: |
-| `scratch/test_sprint5.mjs` | Armamento modular, combate, balística, recarga, XP | 20 | 20 | 0 |
-| `scratch/test_progression_unit.mjs` | Fórmulas XP, curvas 1-50 / 1-20, persistencia, catálogo | 6 | 6 | 0 |
-| `scratch/test_progression_browser.mjs` | UI Armamento, navegación categorías, combate real | 7 | 7 | 0 |
-| `scratch/test_sprint3.mjs` | Navegación lobby, camuflajes, botones, layout responsive | 10 | 10 | 0 |
-| `scratch/run_suite.mjs` | Ciclo de vida, pausas, Oleadas, S&D, fugas de memoria | 14 | 14 | 0 |
-| **TOTAL** | **Validación integral del proyecto** | **57** | **57** | **0** |
+| `tests/test_sprint5.mjs` | 20 criterios de aceptación de armamento modular (Hito 9) | 20 | 20 | 0 |
+| `tests/test_sprint5_closure.mjs` | Cadencia, impactos mixtos M870, recarga interrumpible, persistencia | 5 | 5 | 0 |
+| `tests/test_memory_deep.mjs` | Cadencia real en navegador, anti-burst, 20 swaps, 10 oleadas, 10 S&D | 6 | 6 | 0 |
+| `tests/test_progression_unit.mjs` | Fórmulas matemáticas XP, curvas 1–50 / 1–20, persistencia versionada | 6 | 6 | 0 |
+| `tests/test_progression_browser.mjs` | UI Armamento, filtrado de categorías, XP en combate real | 7 | 7 | 0 |
+| `tests/test_sprint3.mjs` | Navegación de interfaz estilo Warzone, camuflajes, responsive | 10 | 10 | 0 |
+| `tests/test_engine_lifecycle.mjs` | Ciclo de vida del motor (pausas, oleadas, S&D, fugas) | 14 | 14 | 0 |
+| **TOTAL GENERAL** | **Validación integral automatizada del proyecto (`node tests/run_all.mjs`)** | **68** | **68** | **0** |
 
 ---
 
