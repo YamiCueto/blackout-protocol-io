@@ -70,7 +70,7 @@ try {
         historyKills: state.history.kills
       };
     })()`);
-    if (res.version !== 2) throw new Error(`Expected version 2, got ${res.version}`);
+    if (res.version !== 3) throw new Error(`Expected schema version 3 after migration, got ${res.version}`);
     if (res.playerXp !== 1200) throw new Error(`Expected playerXp 1200, got ${res.playerXp}`);
     if (res.mk7Xp !== 350) throw new Error(`Expected mk7Xp 350, got ${res.mk7Xp}`);
     if (res.loadoutCount !== 5) throw new Error(`Expected 5 loadouts, got ${res.loadoutCount}`);

@@ -18,22 +18,40 @@ export function applyVolume() {
   if (masterGain) masterGain.gain.value = settings.volume / 100;
 }
 
-export function sfxShot() {
-  const ac = audio(), t = ac.currentTime;
-  const dur = 0.22;
-  const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
+function playShotSynth(cfg, opts = {}) {
+  const sup = !!opts?.suppressed;
+  const ac = audio();
+  const t = ac.currentTime;
+  const dur = sup ? cfg.dur * 0.78 : cfg.dur;
+  const buf = ac.createBuffer(1, Math.floor(ac.sampleRate * dur), ac.sampleRate);
   const d = buf.getChannelData(0);
-  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.2);
-  const src = ac.createBufferSource(); src.buffer = buf;
-  const lp = ac.createBiquadFilter(); lp.type = 'lowpass';
-  lp.frequency.setValueAtTime(5000, t); lp.frequency.exponentialRampToValueAtTime(300, t + dur);
-  const g = ac.createGain(); g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  src.connect(lp).connect(g).connect(masterGain); src.start(t);
-  // golpe grave
-  const o = ac.createOscillator(); o.type = 'triangle';
-  o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.1);
-  const g2 = ac.createGain(); g2.gain.setValueAtTime(0.5, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
-  o.connect(g2).connect(masterGain); o.start(t); o.stop(t + 0.13);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, cfg.power);
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const lp = ac.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(sup ? cfg.lpStart * 0.28 : cfg.lpStart, t);
+  lp.frequency.exponentialRampToValueAtTime(sup ? cfg.lpEnd * 0.65 : cfg.lpEnd, t + dur);
+  const g = ac.createGain();
+  g.gain.setValueAtTime(sup ? cfg.noiseGain * 0.42 : cfg.noiseGain, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(lp).connect(g).connect(masterGain);
+  src.start(t);
+  const o = ac.createOscillator();
+  o.type = 'triangle';
+  const od = sup ? cfg.oscDur * 0.78 : cfg.oscDur;
+  o.frequency.setValueAtTime(cfg.oscStart, t);
+  o.frequency.exponentialRampToValueAtTime(cfg.oscEnd, t + od);
+  const g2 = ac.createGain();
+  g2.gain.setValueAtTime(sup ? cfg.oscGain * 0.55 : cfg.oscGain, t);
+  g2.gain.exponentialRampToValueAtTime(0.001, t + od + 0.02);
+  o.connect(g2).connect(masterGain);
+  o.start(t);
+  o.stop(t + od + 0.03);
+}
+
+export function sfxShot(opts = {}) {
+  playShotSynth({ dur: 0.22, power: 2.2, lpStart: 5000, lpEnd: 300, noiseGain: 0.5, oscStart: 140, oscEnd: 45, oscDur: 0.1, oscGain: 0.5 }, opts);
 }
 
 export function sfxClick(freq = 2200, vol = 0.12, dur = 0.04) {
@@ -87,21 +105,8 @@ export function sfxEnemyShot() {
   src.connect(bp).connect(g).connect(masterGain); src.start(t);
 }
 
-export function sfxShotVector() {
-  const ac = audio(), t = ac.currentTime;
-  const dur = 0.14;
-  const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.8);
-  const src = ac.createBufferSource(); src.buffer = buf;
-  const lp = ac.createBiquadFilter(); lp.type = 'lowpass';
-  lp.frequency.setValueAtTime(6500, t); lp.frequency.exponentialRampToValueAtTime(600, t + dur);
-  const g = ac.createGain(); g.gain.setValueAtTime(0.42, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  src.connect(lp).connect(g).connect(masterGain); src.start(t);
-  const o = ac.createOscillator(); o.type = 'triangle';
-  o.frequency.setValueAtTime(220, t); o.frequency.exponentialRampToValueAtTime(80, t + 0.08);
-  const g2 = ac.createGain(); g2.gain.setValueAtTime(0.38, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
-  o.connect(g2).connect(masterGain); o.start(t); o.stop(t + 0.1);
+export function sfxShotVector(opts = {}) {
+  playShotSynth({ dur: 0.14, power: 2.8, lpStart: 6500, lpEnd: 600, noiseGain: 0.42, oscStart: 220, oscEnd: 80, oscDur: 0.08, oscGain: 0.38 }, opts);
 }
 
 export function sfxReloadVector() {
@@ -110,21 +115,8 @@ export function sfxReloadVector() {
   setTimeout(() => sfxClick(1600, .18, .04), 480);
 }
 
-export function sfxShotShotgun() {
-  const ac = audio(), t = ac.currentTime;
-  const dur = 0.35;
-  const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 1.8);
-  const src = ac.createBufferSource(); src.buffer = buf;
-  const lp = ac.createBiquadFilter(); lp.type = 'lowpass';
-  lp.frequency.setValueAtTime(3200, t); lp.frequency.exponentialRampToValueAtTime(150, t + dur);
-  const g = ac.createGain(); g.gain.setValueAtTime(0.75, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  src.connect(lp).connect(g).connect(masterGain); src.start(t);
-  const o = ac.createOscillator(); o.type = 'triangle';
-  o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(25, t + 0.18);
-  const g2 = ac.createGain(); g2.gain.setValueAtTime(0.85, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-  o.connect(g2).connect(masterGain); o.start(t); o.stop(t + 0.22);
+export function sfxShotShotgun(opts = {}) {
+  playShotSynth({ dur: 0.35, power: 1.8, lpStart: 3200, lpEnd: 150, noiseGain: 0.75, oscStart: 95, oscEnd: 25, oscDur: 0.18, oscGain: 0.85 }, opts);
 }
 
 export function sfxPumpAction() {
@@ -136,21 +128,8 @@ export function sfxShellInsert() {
   sfxClick(820, .16, .05);
 }
 
-export function sfxShotPistol() {
-  const ac = audio(), t = ac.currentTime;
-  const dur = 0.16;
-  const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.4);
-  const src = ac.createBufferSource(); src.buffer = buf;
-  const lp = ac.createBiquadFilter(); lp.type = 'lowpass';
-  lp.frequency.setValueAtTime(4200, t); lp.frequency.exponentialRampToValueAtTime(400, t + dur);
-  const g = ac.createGain(); g.gain.setValueAtTime(0.55, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  src.connect(lp).connect(g).connect(masterGain); src.start(t);
-  const o = ac.createOscillator(); o.type = 'triangle';
-  o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(50, t + 0.09);
-  const g2 = ac.createGain(); g2.gain.setValueAtTime(0.45, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-  o.connect(g2).connect(masterGain); o.start(t); o.stop(t + 0.11);
+export function sfxShotPistol(opts = {}) {
+  playShotSynth({ dur: 0.16, power: 2.4, lpStart: 4200, lpEnd: 400, noiseGain: 0.55, oscStart: 160, oscEnd: 50, oscDur: 0.09, oscGain: 0.45 }, opts);
 }
 
 export function sfxReloadPistol() {

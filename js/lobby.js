@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { renderer } from './core.js';
 import { texConcrete, texMetal, texCrate } from './textures.js';
 import { buildLobbyWeaponMesh, buildShowcaseWeaponMesh, disposeHierarchyGeometries } from './weapon.js';
+import { applyAttachmentsToModel } from './attachment-visuals.js';
+import { cloneAttachments } from './attachments.js';
 
 export const lobbyScene = new THREE.Scene();
 lobbyScene.background = new THREE.Color(0x060911);
@@ -352,20 +354,24 @@ chestGroup.add(weaponGroup);
 weaponGroup.add(buildLobbyWeaponMesh('mk7'));
 
 let currentLobbyWeaponId = 'mk7';
+let currentLobbyAttKey = '';
 
 export function getLobbyWeaponId() {
   return currentLobbyWeaponId;
 }
 
-export function setLobbyWeapon(weaponId) {
-  if (currentLobbyWeaponId === weaponId && weaponGroup.children.length > 0) return;
+export function setLobbyWeapon(weaponId, attachments = null) {
+  const cleanAtt = cloneAttachments(attachments);
+  const attKey = JSON.stringify(cleanAtt);
+  if (currentLobbyWeaponId === weaponId && currentLobbyAttKey === attKey && weaponGroup.children.length > 0) return;
   currentLobbyWeaponId = weaponId;
+  currentLobbyAttKey = attKey;
   while (weaponGroup.children.length > 0) {
     const child = weaponGroup.children[0];
     weaponGroup.remove(child);
     disposeHierarchyGeometries(child);
   }
-  weaponGroup.add(buildLobbyWeaponMesh(weaponId));
+  weaponGroup.add(buildLobbyWeaponMesh(weaponId, cleanAtt));
 }
 
 const SHOWCASE_ORIGIN = new THREE.Vector3(-0.15, 1.48, 0.55);
@@ -427,6 +433,8 @@ const showcaseState = {
   weaponId: 'mk7',
   status: 'UNLOCKED',
   implementation: 'IMPLEMENTED',
+  attachments: cloneAttachments(null),
+  attachmentsKey: '',
   scale: 1,
   halfW: 0.72,
   halfH: 0.24,
@@ -537,10 +545,33 @@ function updateShowcaseLights(meta = {}) {
   }
 }
 
+function updateShowcaseBoundsFromWrapper(wrapper) {
+  const prevPitch = showcasePivot.rotation.x;
+  const prevYaw = showcasePivot.rotation.y;
+  const prevRootX = showcaseRoot.position.x;
+  const prevRootY = showcaseRoot.position.y;
+  const prevRootZ = showcaseRoot.position.z;
+  showcasePivot.rotation.set(0, 0, 0);
+  showcaseRoot.position.set(0, 0, 0);
+  showcaseRoot.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(wrapper);
+  showcasePivot.rotation.set(prevPitch, prevYaw, 0);
+  showcaseRoot.position.set(prevRootX, prevRootY, prevRootZ);
+  showcaseRoot.updateMatrixWorld(true);
+  if (!box.isEmpty()) {
+    showcaseState.halfW = Math.max(Math.abs(box.min.x), Math.abs(box.max.x));
+    showcaseState.halfH = Math.max(Math.abs(box.min.y), Math.abs(box.max.y));
+    showcaseState.halfD = Math.max(Math.abs(box.min.z), Math.abs(box.max.z));
+  }
+}
+
 export function setShowcaseWeapon(weaponId, options = {}) {
   const id = weaponId || 'mk7';
   const status = options.status || 'UNLOCKED';
   const impl = options.implementation || 'IMPLEMENTED';
+  const cleanAtt = impl === 'IMPLEMENTED' ? cloneAttachments(options.attachments) : cloneAttachments(null);
+  const attKey = JSON.stringify(cleanAtt);
+
   if (
     showcaseHolder.children.length > 0 &&
     showcaseState.weaponId === id &&
@@ -548,7 +579,17 @@ export function setShowcaseWeapon(weaponId, options = {}) {
     showcaseState.implementation === impl
   ) {
     updateShowcaseLights(options);
-    return;
+    if (showcaseState.attachmentsKey === attKey) return;
+    const wrapper = showcaseHolder.children[0];
+    const model = wrapper?.userData?.showcaseModel;
+    if (model && impl === 'IMPLEMENTED') {
+      applyAttachmentsToModel(model, id, cleanAtt);
+      showcaseState.attachments = cleanAtt;
+      showcaseState.attachmentsKey = attKey;
+      updateShowcaseBoundsFromWrapper(wrapper);
+      recomputeShowcaseFraming(false);
+      return;
+    }
   }
 
   while (showcaseHolder.children.length > 0) {
@@ -560,25 +601,28 @@ export function setShowcaseWeapon(weaponId, options = {}) {
   showcaseState.weaponId = id;
   showcaseState.status = status;
   showcaseState.implementation = impl;
+  showcaseState.attachments = cleanAtt;
+  showcaseState.attachmentsKey = attKey;
 
-  const mesh = buildShowcaseWeaponMesh(id, options);
-  mesh.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(mesh);
-  const size = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+  const baseMesh = buildShowcaseWeaponMesh(id, { ...options, attachments: null });
+  baseMesh.updateMatrixWorld(true);
+  const baseBox = new THREE.Box3().setFromObject(baseMesh);
+  const baseSize = baseBox.getSize(new THREE.Vector3());
+  const baseCenter = baseBox.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(baseSize.x, baseSize.y, baseSize.z, 0.001);
   const targetSpan = SHOWCASE_SPANS[id] || 1.42;
   const scale = targetSpan / maxDim;
 
-  mesh.scale.setScalar(scale);
-  mesh.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
-  showcaseHolder.add(mesh);
+  baseMesh.scale.setScalar(scale);
+  baseMesh.position.set(-baseCenter.x * scale, -baseCenter.y * scale, -baseCenter.z * scale);
+  if (impl === 'IMPLEMENTED' && baseMesh.userData?.showcaseModel) {
+    applyAttachmentsToModel(baseMesh.userData.showcaseModel, id, cleanAtt);
+  }
+  showcaseHolder.add(baseMesh);
   showcaseHolder.updateMatrixWorld(true);
 
   showcaseState.scale = scale;
-  showcaseState.halfW = (size.x * scale) * 0.5;
-  showcaseState.halfH = (size.y * scale) * 0.5;
-  showcaseState.halfD = (size.z * scale) * 0.5;
+  updateShowcaseBoundsFromWrapper(baseMesh);
 
   updateShowcaseLights(options);
   recomputeShowcaseFraming(true);
@@ -608,6 +652,7 @@ export function getShowcaseState() {
     weaponId: showcaseState.weaponId,
     status: showcaseState.status,
     implementation: showcaseState.implementation,
+    attachments: cloneAttachments(showcaseState.attachments),
     operatorVisible: operator.visible,
     showcaseVisible: showcaseRoot.visible,
     lightsVisible: showcaseLights.visible,

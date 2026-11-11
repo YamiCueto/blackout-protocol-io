@@ -13,6 +13,8 @@ import {
   sfxReloadPistol,
   sfxWeaponSwap
 } from './audio.js';
+import { resolveWeaponStats, cloneAttachments } from './attachments.js';
+import { applyAttachmentsToModel, disposeNonSharedGeometries } from './attachment-visuals.js';
 
 export const GUN_HIP = new THREE.Vector3(0.28, -0.26, -0.55);
 export const GUN_ADS = new THREE.Vector3(0, -0.168, -0.42);
@@ -39,18 +41,23 @@ function buildMk7Mesh() {
   const muzzleBrake = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.07, 12), dark);
   muzzleBrake.rotation.x = Math.PI / 2;
   muzzleBrake.position.set(0, 0.012, -0.72);
+  muzzleBrake.userData.partRole = 'muzzle_default';
   const mag = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.2, 0.1), dark);
   mag.position.set(0, -0.14, -0.04);
   mag.rotation.x = 0.18;
+  mag.userData.partRole = 'magazine_default';
   const handle = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.16, 0.07), grip);
   handle.position.set(0, -0.12, 0.12);
   handle.rotation.x = -0.25;
   const stock = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.09, 0.22), dark2);
   stock.position.set(0, -0.01, 0.3);
+  stock.userData.partRole = 'stock_default';
   const sightF = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.045, 0.012), dark);
   sightF.position.set(0, 0.078, -0.32);
+  sightF.userData.partRole = 'sight_front';
   const sightR = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.035, 0.02), dark);
   sightR.position.set(0, 0.073, 0.08);
+  sightR.userData.partRole = 'optic_default';
   const rail = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.02, 0.3), dark);
   rail.position.set(0, 0.065, -0.15);
   const foreGrip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.07, 0.2), grip);
@@ -73,6 +80,7 @@ function buildVectorMesh() {
   const mag = new THREE.Mesh(new THREE.BoxGeometry(0.046, 0.25, 0.065), dark);
   mag.position.set(0, -0.22, -0.16);
   mag.rotation.x = -0.12;
+  mag.userData.partRole = 'magazine_default';
   const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.22, 12), metal);
   barrel.rotation.x = Math.PI / 2;
   barrel.position.set(0, 0.018, -0.36);
@@ -83,10 +91,12 @@ function buildVectorMesh() {
   handle.rotation.x = -0.28;
   const stock = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.075, 0.21), dark2);
   stock.position.set(0, 0.01, 0.2);
+  stock.userData.partRole = 'stock_default';
   const rail = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.02, 0.34), dark);
   rail.position.set(0, 0.068, -0.08);
   const holoSight = new THREE.Mesh(new THREE.BoxGeometry(0.044, 0.042, 0.07), dark);
   holoSight.position.set(0, 0.096, -0.05);
+  holoSight.userData.partRole = 'optic_default';
 
   for (const m of [body, magWell, mag, barrel, shroud, handle, stock, rail, holoSight]) {
     m.castShadow = true;
@@ -115,6 +125,7 @@ function buildM870Mesh() {
   handle.rotation.x = -0.3;
   const stock = new THREE.Mesh(new THREE.BoxGeometry(0.058, 0.115, 0.29), dark2);
   stock.position.set(0, -0.02, 0.36);
+  stock.userData.partRole = 'stock_default';
   const bead = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.024, 0.012), dark);
   bead.position.set(0, 0.068, -0.76);
   const ejector = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.032, 0.12), dark);
@@ -145,6 +156,7 @@ function buildP12Mesh() {
   sightF.position.set(0, 0.055, -0.17);
   const sightR = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.02, 0.012), dark);
   sightR.position.set(0, 0.055, 0.07);
+  sightR.userData.partRole = 'optic_default';
 
   for (const m of [slide, barrel, frame, handle, triggerGuard, sightF, sightR]) {
     m.castShadow = true;
@@ -339,6 +351,10 @@ export const weapon = {
   recoilRecovery: 9.0,
   mobilityMultiplier: 1.0,
   adsSpeed: 12.0,
+  adsZoomOffset: 25,
+  muzzleFlashMult: 1.0,
+  audioSuppressed: false,
+  attachments: cloneAttachments(null),
   reloadType: 'magazine',
   shellReload: null,
   reloadStage: 'idle',
@@ -353,58 +369,75 @@ export const weapon = {
 export function setWeapon(id, options = {}) {
   const def = WEAPONS[id] || WEAPONS.mk7;
   const isSameMesh = weapon.id === def.id && weaponMeshSubGroup.children.length > 0;
+  const resolved = options.effectiveStats ? options.effectiveStats : resolveWeaponStats(def, options.attachments);
+  const cleanAtt = cloneAttachments(options.attachments || resolved.attachments);
+
   weapon.id = def.id;
   weapon.name = def.name;
   weapon.category = def.category;
-  weapon.magSize = def.magSize;
+  weapon.magSize = resolved.magSize;
   if (!options.preserveState) {
-    weapon.ammo = def.magSize;
-    weapon.reserve = def.reserveDefault;
+    weapon.ammo = resolved.magSize;
+    weapon.reserve = options.isSnd ? resolved.reserveSnd : resolved.reserveDefault;
     weapon.cooldown = 0;
     weapon.reloading = false;
     weapon.reloadT = 0;
     weapon.reloadStage = 'idle';
   }
-  weapon.reserveDefault = def.reserveDefault;
-  weapon.reserveSnd = def.reserveSnd;
-  weapon.fireRate = def.fireRate;
-  weapon.reloadTime = def.reloadTime;
-  weapon.damage = def.damage;
+  weapon.reserveDefault = resolved.reserveDefault;
+  weapon.reserveSnd = resolved.reserveSnd;
+  weapon.fireRate = resolved.fireRate;
+  weapon.reloadTime = resolved.reloadTime;
+  weapon.damage = resolved.damage;
   weapon.recoil = options.preserveState ? (weapon.recoil || 0) : 0;
-  weapon.pellets = def.pellets;
-  weapon.fireMode = def.fireMode;
-  weapon.dropoff = def.dropoff;
-  weapon.spreadHip = def.spreadHip;
-  weapon.spreadAds = def.spreadAds;
-  weapon.recoilSpreadHip = def.recoilSpreadHip;
-  weapon.recoilSpreadAds = def.recoilSpreadAds;
-  weapon.recoilKick = def.recoilKick;
-  weapon.recoilMax = def.recoilMax;
-  weapon.recoilRecovery = def.recoilRecovery;
-  weapon.mobilityMultiplier = def.mobilityMultiplier;
-  weapon.adsSpeed = def.adsSpeed;
-  weapon.reloadType = def.reloadType;
-  weapon.shellReload = def.shellReload;
+  weapon.pellets = resolved.pellets;
+  weapon.fireMode = resolved.fireMode;
+  weapon.dropoff = resolved.dropoff ? { ...resolved.dropoff } : null;
+  weapon.spreadHip = resolved.spreadHip;
+  weapon.spreadAds = resolved.spreadAds;
+  weapon.recoilSpreadHip = resolved.recoilSpreadHip;
+  weapon.recoilSpreadAds = resolved.recoilSpreadAds;
+  weapon.recoilKick = resolved.recoilKick;
+  weapon.recoilMax = resolved.recoilMax;
+  weapon.recoilRecovery = resolved.recoilRecovery;
+  weapon.mobilityMultiplier = resolved.mobilityMultiplier;
+  weapon.adsSpeed = resolved.adsSpeed;
+  weapon.adsZoomOffset = resolved.adsZoomOffset;
+  weapon.muzzleFlashMult = resolved.muzzleFlashMult;
+  weapon.audioSuppressed = resolved.audioSuppressed;
+  weapon.attachments = cleanAtt;
+  weapon.reloadType = resolved.reloadType;
+  weapon.shellReload = resolved.shellReload ? { ...resolved.shellReload } : null;
   weapon.interruptReload = false;
   weapon.pumped = true;
   weapon.audio = def.audio;
 
-  GUN_HIP.copy(def.hipPos);
-  GUN_ADS.copy(def.adsPos);
-  gunGroup.position.copy(GUN_HIP);
-
-  muzzleFlash.position.copy(def.muzzlePos);
-  flashSprite.position.set(def.muzzlePos.x, def.muzzlePos.y, def.muzzlePos.z - 0.02);
-
+  let mesh = isSameMesh ? weaponMeshSubGroup.children[0] : null;
   if (!isSameMesh) {
     while (weaponMeshSubGroup.children.length > 0) {
       const child = weaponMeshSubGroup.children[0];
       weaponMeshSubGroup.remove(child);
       disposeHierarchyGeometries(child);
     }
-    const mesh = def.buildMesh();
+    mesh = def.buildMesh();
     weaponMeshSubGroup.add(mesh);
   }
+  const vis = applyAttachmentsToModel(mesh, def.id, cleanAtt);
+
+  GUN_HIP.copy(def.hipPos);
+  GUN_ADS.copy(def.adsPos);
+  if (vis && Number.isFinite(vis.adsYOffset)) {
+    GUN_ADS.y += vis.adsYOffset;
+  }
+  gunGroup.position.copy(GUN_HIP);
+
+  if (vis && vis.muzzlePosOverride) {
+    muzzleFlash.position.set(vis.muzzlePosOverride[0], vis.muzzlePosOverride[1], vis.muzzlePosOverride[2]);
+  } else {
+    muzzleFlash.position.copy(def.muzzlePos);
+  }
+  flashSprite.position.set(muzzleFlash.position.x, muzzleFlash.position.y, muzzleFlash.position.z - 0.02);
+
   return weapon;
 }
 
@@ -424,7 +457,7 @@ export function getDamageWithDropoff(wpn, dist, isHeadshot) {
   return isHeadshot ? base * headMult : base;
 }
 
-export function buildLobbyWeaponMesh(id) {
+export function buildLobbyWeaponMesh(id, attachments = null) {
   const grp = new THREE.Group();
 
   if (id === 'vector9') {
@@ -435,6 +468,7 @@ export function buildLobbyWeaponMesh(id) {
     mag.position.set(0, -0.16, 0.06);
     mag.rotation.x = 0.15;
     mag.castShadow = true;
+    mag.userData.partRole = 'magazine_default';
     grp.add(mag);
     const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.22, 10), matM);
     barrel.rotation.x = Math.PI / 2;
@@ -444,6 +478,7 @@ export function buildLobbyWeaponMesh(id) {
     const stock = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.08, 0.22), matV);
     stock.position.set(0, 0.01, -0.26);
     stock.castShadow = true;
+    stock.userData.partRole = 'stock_default';
     grp.add(stock);
   } else if (id === 'm870') {
     const rec = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.13, 0.44), matG);
@@ -467,6 +502,7 @@ export function buildLobbyWeaponMesh(id) {
     const stock = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.11, 0.28), matV);
     stock.position.set(0, -0.02, -0.32);
     stock.castShadow = true;
+    stock.userData.partRole = 'stock_default';
     grp.add(stock);
   } else if (id === 'p12') {
     const slide = new THREE.Mesh(new THREE.BoxGeometry(0.046, 0.065, 0.28), matM);
@@ -496,12 +532,23 @@ export function buildLobbyWeaponMesh(id) {
     mag.position.set(0, -0.14, 0.06);
     mag.rotation.x = -0.22;
     mag.castShadow = true;
+    mag.userData.partRole = 'magazine_default';
     grp.add(mag);
     const stock = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.12, 0.26), matV);
     stock.position.set(0, -0.01, -0.32);
     stock.castShadow = true;
+    stock.userData.partRole = 'stock_default';
     grp.add(stock);
   }
+
+  if (attachments && WEAPONS[id] && Object.values(attachments).some(Boolean)) {
+    const attGrp = new THREE.Group();
+    attGrp.rotation.y = Math.PI;
+    attGrp.position.set(0, 0, 0.02);
+    applyAttachmentsToModel(attGrp, id, attachments, { roleRoot: grp });
+    grp.add(attGrp);
+  }
+
   return grp;
 }
 
@@ -600,12 +647,7 @@ function buildProtoFromSpec(parts) {
 }
 
 export function disposeHierarchyGeometries(root) {
-  if (!root) return;
-  const geometries = new Set();
-  root.traverse(o => {
-    if (o.isMesh && o.geometry) geometries.add(o.geometry);
-  });
-  for (const g of geometries) g.dispose();
+  return disposeNonSharedGeometries(root);
 }
 
 export function buildShowcaseWeaponMesh(id, options = {}) {
@@ -628,7 +670,11 @@ export function buildShowcaseWeaponMesh(id, options = {}) {
     model.traverse(o => {
       if (o.isMesh && o.material === metal) o.material = metalBright;
     });
+    if (options.attachments) {
+      applyAttachmentsToModel(model, id, options.attachments);
+    }
   }
+  wrapper.userData.showcaseModel = model;
   wrapper.add(model);
   return wrapper;
 }

@@ -25,6 +25,22 @@ import {
   recomputeShowcaseFraming
 } from './lobby.js';
 import { progression, WEAPON_CATEGORIES, isWeaponUnlocked } from './progression.js';
+import {
+  ATTACHMENT_SLOTS,
+  ATTACHMENT_CATALOG,
+  getAttachmentsForWeapon,
+  getAttachmentById,
+  getSlotMeta,
+  isSlotCompatibleWithWeapon,
+  isAttachmentUnlocked,
+  canEquipAttachment,
+  cloneAttachments,
+  resolveWeaponStats,
+  getArmoryRatings,
+  getAttachmentProsCons,
+  compareWeaponStats
+} from './attachments.js';
+import { SHARED_ATTACHMENT_GEOMETRIES } from './attachment-visuals.js';
 
 /* ---------------- Ajustes: aplicación y UI ---------------- */
 function applySettings() {
@@ -74,6 +90,45 @@ let activeArmoryCat = 'ASSAULT';
 let activeInspectedWeaponId = 'mk7';
 let editingLoadoutId = 'loadout_1';
 let editingSlot = 'primary';
+let customizerOpen = false;
+let activeAttachSlot = 'optic';
+let previewAttachment = null;
+
+function getInstalledAttachments(weaponId, curLoadout) {
+  return progression.getLoadoutWeaponAttachments(curLoadout?.id || editingLoadoutId, weaponId);
+}
+
+function getEffectivePreviewAttachments(weaponId, curLoadout) {
+  const installed = getInstalledAttachments(weaponId, curLoadout);
+  const effective = cloneAttachments(installed);
+  let isPreviewing = false;
+  if (previewAttachment && previewAttachment.weaponId === weaponId && previewAttachment.slot) {
+    if (effective[previewAttachment.slot] !== previewAttachment.attachmentId) {
+      effective[previewAttachment.slot] = previewAttachment.attachmentId;
+      isPreviewing = true;
+    }
+  }
+  return { installed, effective, isPreviewing };
+}
+
+function setCustomizerOpen(open) {
+  customizerOpen = !!open;
+  if (!customizerOpen) {
+    previewAttachment = null;
+    activeAttachSlot = 'optic';
+  }
+  const panel = document.querySelector('#tab-loadout .loadout-panel');
+  const browseEl = $('armory-browse-body');
+  const custEl = $('armory-customizer');
+  if (panel) panel.classList.toggle('is-customizing', customizerOpen);
+  if (browseEl) browseEl.style.display = customizerOpen ? 'none' : 'flex';
+  if (custEl) custEl.style.display = customizerOpen ? 'flex' : 'none';
+  if (customizerOpen && !isSlotCompatibleWithWeapon(activeInspectedWeaponId, activeAttachSlot)) {
+    const firstSlot = ATTACHMENT_SLOTS.find(s => isSlotCompatibleWithWeapon(activeInspectedWeaponId, s.id));
+    activeAttachSlot = firstSlot ? firstSlot.id : 'optic';
+  }
+  renderInspectedWeapon();
+}
 
 function updatePlayerHeaderUI() {
   const pInfo = progression.getPlayerInfo();
@@ -116,6 +171,7 @@ function renderLoadoutsBar() {
           if (pCat) activeArmoryCat = pCat;
         }
       }
+      previewAttachment = null;
       document.querySelectorAll('.armory-cat-btn').forEach(c => {
         c.classList.toggle('active', c.dataset.cat === activeArmoryCat);
       });
@@ -151,7 +207,8 @@ function renderLoadoutsBar() {
       badgeDeploy.style.display = 'none';
       btnDeploy.onclick = () => {
         progression.selectLoadout(editingLoadoutId);
-        setLobbyWeapon(progression.getActiveLoadout().primary);
+        const curDep = progression.getActiveLoadout();
+        setLobbyWeapon(curDep.primary, curDep.weaponAttachments?.[curDep.primary]);
         renderLoadoutsBar();
         renderArmoryWeapons();
       };
@@ -340,6 +397,20 @@ function initArmoryUI() {
   renderLoadoutsBar();
   renderArmoryWeapons();
   updateCategoryArrows();
+
+  const btnBack = $('btn-cust-back');
+  if (btnBack) {
+    btnBack.onclick = () => setCustomizerOpen(false);
+  }
+  const btnCancelPrev = $('btn-cancel-preview');
+  if (btnCancelPrev) {
+    btnCancelPrev.addEventListener('pointerdown', e => e.stopPropagation());
+    btnCancelPrev.onclick = e => {
+      e.stopPropagation();
+      previewAttachment = null;
+      renderInspectedWeapon();
+    };
+  }
 }
 
 function renderArmoryWeapons() {
@@ -383,6 +454,7 @@ function renderArmoryWeapons() {
     `;
     card.onclick = () => {
       activeInspectedWeaponId = w.id;
+      previewAttachment = null;
       document.querySelectorAll('.weapon-card').forEach(c => {
         c.classList.toggle('selected', c.dataset.id === activeInspectedWeaponId);
       });
@@ -410,21 +482,58 @@ function formatWeaponBadgeName(id) {
   return WEAPONS[id] ? WEAPONS[id].name.replace(/\s+(CARBINE|BREACHER|TACTICAL)$/i, '') : id.toUpperCase();
 }
 
-function updateShowcaseContextHUD(w, caliber, curLoadout, isEquippedInSlot) {
+function updateShowcaseContextHUD(w, caliber, curLoadout, isEquippedInSlot, effectiveAttachments = null, isPreviewing = false) {
   const activeDeploy = progression.getActiveLoadout();
   const cat = WEAPON_CATEGORIES.find(c => c.id === w.category);
   const titleEl = $('showcase-title');
   const subEl = $('showcase-sub');
+  const inspectPill = $('showcase-inspect-pill');
   const statePill = $('showcase-state-pill');
+  const attPillsEl = $('showcase-att-pills');
   const noteEl = $('showcase-note');
   const editNameEl = $('ctx-editing-name');
   const editWpnsEl = $('ctx-editing-weapons');
   const depNameEl = $('ctx-deploy-name');
   const depWpnsEl = $('ctx-deploy-weapons');
   const diffEl = $('showcase-diff-hint');
+  const cancelPrevBtn = $('btn-cancel-preview');
 
   if (titleEl) titleEl.textContent = w.name;
   if (subEl) subEl.textContent = `${cat ? cat.name : w.category} • ${caliber}`;
+
+  if (inspectPill) {
+    if (isPreviewing) {
+      inspectPill.textContent = 'VISTA PREVIA';
+      inspectPill.className = 'showcase-pill pill-preview';
+    } else if (isEquippedInSlot) {
+      inspectPill.textContent = 'EQUIPAMIENTO INSTALADO';
+      inspectPill.className = 'showcase-pill pill-inspect';
+    } else {
+      inspectPill.textContent = 'INSPECCIONANDO';
+      inspectPill.className = 'showcase-pill pill-inspect';
+    }
+  }
+
+  if (cancelPrevBtn) {
+    cancelPrevBtn.style.display = isPreviewing ? 'inline-block' : 'none';
+  }
+
+  if (attPillsEl) {
+    attPillsEl.innerHTML = '';
+    if (w.implementation === 'IMPLEMENTED' && effectiveAttachments) {
+      for (const slot of ATTACHMENT_SLOTS) {
+        const attId = effectiveAttachments[slot.id];
+        if (!attId) continue;
+        const att = getAttachmentById(attId);
+        if (!att) continue;
+        const chip = document.createElement('span');
+        const chipPreview = !!(previewAttachment && previewAttachment.weaponId === w.id && previewAttachment.slot === slot.id && previewAttachment.attachmentId === attId && isPreviewing);
+        chip.className = 'showcase-att-pill' + (chipPreview ? ' is-preview' : '');
+        chip.textContent = `${slot.shortLabel}: ${att.shortName}`;
+        attPillsEl.appendChild(chip);
+      }
+    }
+  }
 
   if (statePill) {
     if (w.implementation === 'PLANNED') {
@@ -443,7 +552,10 @@ function updateShowcaseContextHUD(w, caliber, curLoadout, isEquippedInSlot) {
   }
 
   if (noteEl) {
-    if (w.implementation === 'PLANNED') {
+    if (isPreviewing) {
+      noteEl.textContent = 'VISTA PREVIA EN VIVO — NO ALTERA LA CLASE EQUIPADA NI PARTIDAS ACTIVAS';
+      noteEl.className = 'showcase-note';
+    } else if (w.implementation === 'PLANNED') {
       noteEl.textContent = 'CONCEPTO VISUAL NO JUGABLE — SOLO EXHIBICIÓN';
       noteEl.className = 'showcase-note';
     } else if (w.status === 'LOCKED') {
@@ -475,10 +587,218 @@ function updateShowcaseContextHUD(w, caliber, curLoadout, isEquippedInSlot) {
   }
 }
 
+function renderCustomizer(w, wDef, curLoadout, installed, effective, isPreviewing) {
+  const nameEl = $('cust-weapon-name');
+  const lvlEl = $('cust-weapon-lvl');
+  const resetBtn = $('btn-cust-reset');
+  const tabsEl = $('cust-slot-tabs');
+  const listEl = $('cust-list');
+  const diffEl = $('cust-diff-box');
+  if (!tabsEl || !listEl || !diffEl) return;
+
+  if (nameEl) nameEl.textContent = w.name;
+  if (lvlEl) lvlEl.textContent = `NVL ${w.levelInfo.level}/${w.maxLevel}`;
+
+  const hasAnyInstalled = Object.values(installed).some(Boolean);
+  if (resetBtn) {
+    resetBtn.disabled = !hasAnyInstalled;
+    resetBtn.onclick = () => {
+      previewAttachment = null;
+      progression.clearLoadoutWeaponAttachments(editingLoadoutId, w.id);
+      const curDep = progression.getActiveLoadout();
+      if (editingLoadoutId === curDep.id && w.id === curDep.primary) {
+        setLobbyWeapon(curDep.primary, curDep.weaponAttachments?.[curDep.primary]);
+      }
+      renderInspectedWeapon();
+    };
+  }
+
+  tabsEl.innerHTML = '';
+  for (const slot of ATTACHMENT_SLOTS) {
+    const compatible = isSlotCompatibleWithWeapon(w.id, slot.id);
+    const instId = installed[slot.id];
+    const effId = effective[slot.id];
+    const isSlotPreview = isPreviewing && previewAttachment?.slot === slot.id && effId !== instId;
+    const shownDef = effId ? getAttachmentById(effId) : null;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.slot = slot.id;
+    btn.className = 'cust-slot-btn'
+      + (activeAttachSlot === slot.id ? ' active' : '')
+      + (!compatible ? ' incompatible' : '')
+      + (instId ? ' equipped' : '')
+      + (isSlotPreview ? ' previewing' : '');
+    const lbl = document.createElement('span');
+    lbl.className = 'cust-slot-label';
+    lbl.textContent = slot.shortLabel;
+    const val = document.createElement('span');
+    val.className = 'cust-slot-val';
+    val.textContent = !compatible ? 'NO COMP.' : (shownDef ? shownDef.shortName : 'BASE');
+    btn.append(lbl, val);
+    btn.onclick = () => {
+      activeAttachSlot = slot.id;
+      renderInspectedWeapon();
+    };
+    tabsEl.appendChild(btn);
+  }
+
+  listEl.innerHTML = '';
+  const slotMeta = getSlotMeta(activeAttachSlot);
+  const compatibleList = getAttachmentsForWeapon(w.id, activeAttachSlot);
+  if (compatibleList.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'cust-empty-msg';
+    empty.textContent = `ESTA PLATAFORMA NO ADMITE ${slotMeta ? slotMeta.label : activeAttachSlot.toUpperCase()}`;
+    listEl.appendChild(empty);
+  } else {
+    for (const att of compatibleList) {
+      const isInstalled = installed[activeAttachSlot] === att.id;
+      const isThisPreview = !!(previewAttachment
+        && previewAttachment.weaponId === w.id
+        && previewAttachment.slot === activeAttachSlot
+        && previewAttachment.attachmentId === att.id
+        && !isInstalled);
+      const unlockedByLevel = isAttachmentUnlocked(att, w.levelInfo.level);
+      const canInstall = w.status === 'UNLOCKED' && unlockedByLevel;
+
+      const card = document.createElement('div');
+      card.className = 'cust-card' + (isInstalled ? ' installed' : '') + (isThisPreview ? ' previewing' : '');
+      card.dataset.attachmentId = att.id;
+
+      const head = document.createElement('div');
+      head.className = 'cust-card-head';
+      const title = document.createElement('span');
+      title.className = 'cust-card-title';
+      title.textContent = att.name;
+      const badge = document.createElement('span');
+      if (isInstalled) {
+        badge.className = 'cust-card-badge st-installed';
+        badge.textContent = 'INSTALADO';
+      } else if (isThisPreview) {
+        badge.className = 'cust-card-badge st-preview';
+        badge.textContent = 'VISTA PREVIA';
+      } else if (!unlockedByLevel) {
+        badge.className = 'cust-card-badge st-locked';
+        badge.textContent = `BLOQUEADO • NVL ${att.unlockWeaponLevel}`;
+      } else if (w.status !== 'UNLOCKED') {
+        badge.className = 'cust-card-badge st-locked';
+        badge.textContent = `ARMA NVL ${w.reqLevel}`;
+      } else {
+        badge.className = 'cust-card-badge st-available';
+        badge.textContent = 'DISPONIBLE';
+      }
+      head.append(title, badge);
+
+      const desc = document.createElement('div');
+      desc.className = 'cust-card-desc';
+      desc.textContent = att.description;
+
+      const mods = document.createElement('div');
+      mods.className = 'cust-mods-grid';
+      const { pros, cons } = getAttachmentProsCons(att, w.id);
+      for (const p of pros) {
+        const sp = document.createElement('span');
+        sp.className = 'cust-mod-pro';
+        sp.textContent = p;
+        mods.appendChild(sp);
+      }
+      for (const c of cons) {
+        const sp = document.createElement('span');
+        sp.className = 'cust-mod-con';
+        sp.textContent = c;
+        mods.appendChild(sp);
+      }
+
+      const actions = document.createElement('div');
+      actions.className = 'cust-card-actions';
+
+      if (!isInstalled) {
+        const prevBtn = document.createElement('button');
+        prevBtn.type = 'button';
+        prevBtn.className = 'btn-cust-preview' + (isThisPreview ? ' active' : '');
+        prevBtn.textContent = isThisPreview ? 'QUITAR PREVIA' : 'VISTA PREVIA';
+        prevBtn.onclick = () => {
+          previewAttachment = isThisPreview
+            ? null
+            : { weaponId: w.id, slot: activeAttachSlot, attachmentId: att.id };
+          renderInspectedWeapon();
+        };
+        actions.appendChild(prevBtn);
+      }
+
+      const instBtn = document.createElement('button');
+      instBtn.type = 'button';
+      if (isInstalled) {
+        instBtn.className = 'btn-cust-install remove';
+        instBtn.textContent = 'RETIRAR';
+        instBtn.onclick = () => {
+          previewAttachment = null;
+          progression.setLoadoutWeaponAttachment(editingLoadoutId, w.id, activeAttachSlot, null);
+          const curDep = progression.getActiveLoadout();
+          if (editingLoadoutId === curDep.id && w.id === curDep.primary) {
+            setLobbyWeapon(curDep.primary, curDep.weaponAttachments?.[curDep.primary]);
+          }
+          renderInspectedWeapon();
+        };
+      } else {
+        instBtn.className = 'btn-cust-install';
+        instBtn.textContent = 'INSTALAR';
+        instBtn.disabled = !canInstall;
+        instBtn.onclick = () => {
+          previewAttachment = null;
+          const res = progression.setLoadoutWeaponAttachment(editingLoadoutId, w.id, activeAttachSlot, att.id);
+          if (res.ok) {
+            const curDep = progression.getActiveLoadout();
+            if (editingLoadoutId === curDep.id && w.id === curDep.primary) {
+              setLobbyWeapon(curDep.primary, curDep.weaponAttachments?.[curDep.primary]);
+            }
+            renderInspectedWeapon();
+          }
+        };
+      }
+      actions.appendChild(instBtn);
+
+      card.append(head, desc, mods, actions);
+      listEl.appendChild(card);
+    }
+  }
+
+  diffEl.innerHTML = '';
+  if (wDef) {
+    const baseStats = resolveWeaponStats(wDef, null);
+    const effStats = resolveWeaponStats(wDef, effective);
+    const comp = compareWeaponStats(baseStats, effStats);
+    const dTitle = document.createElement('div');
+    dTitle.className = 'cust-diff-title';
+    dTitle.innerHTML = `<span>COMPARATIVA VS BASE</span><span>${isPreviewing ? 'CON VISTA PREVIA' : 'INSTALADO'}</span>`;
+    const rowsWrap = document.createElement('div');
+    rowsWrap.className = 'cust-diff-rows';
+    for (const row of comp.rows) {
+      const rEl = document.createElement('div');
+      rEl.className = 'cust-diff-row';
+      const lbl = document.createElement('span');
+      lbl.textContent = row.label;
+      const val = document.createElement('b');
+      val.className = row.improved ? 'improved' : (row.degraded ? 'degraded' : '');
+      val.textContent = row.changed
+        ? `${row.format(row.base)} → ${row.format(row.target)}`
+        : row.format(row.target);
+      rEl.append(lbl, val);
+      rowsWrap.appendChild(rEl);
+    }
+    diffEl.append(dTitle, rowsWrap);
+  }
+}
+
 function renderInspectedWeapon() {
   const catalog = progression.getCatalogWithStatus();
   const w = catalog.find(x => x.id === activeInspectedWeaponId) || catalog[0];
   if (!w) return;
+
+  if (previewAttachment && previewAttachment.weaponId !== w.id) {
+    previewAttachment = null;
+  }
 
   const nameEl = $('loadout-weapon-name');
   const typeEl = $('loadout-weapon-type');
@@ -487,10 +807,15 @@ function renderInspectedWeapon() {
   const xpTxt = $('loadout-weapon-xp-text');
   const descEl = $('loadout-weapon-desc');
   const btnEquip = $('btn-equip-weapon');
+  const btnCustomize = $('btn-customize-weapon');
   const statusTag = $('loadout-status-tag');
+  const attSummaryEl = $('armory-att-summary-row');
   const curLoadout = progression.getLoadouts().find(l => l.id === editingLoadoutId) || progression.getActiveLoadout();
   const activeDeploy = progression.getActiveLoadout();
   const caliber = WEAPON_CALIBERS[w.id] || 'CLASIFICADO';
+  const { installed, effective, isPreviewing } = w.implementation === 'IMPLEMENTED'
+    ? getEffectivePreviewAttachments(w.id, curLoadout)
+    : { installed: {}, effective: {}, isPreviewing: false };
 
   if (nameEl) nameEl.textContent = w.name;
   if (typeEl) {
@@ -506,22 +831,52 @@ function renderInspectedWeapon() {
   }
   if (descEl) descEl.textContent = w.desc;
 
+  if (attSummaryEl) {
+    attSummaryEl.innerHTML = '';
+    if (w.implementation === 'IMPLEMENTED') {
+      const equippedCount = ATTACHMENT_SLOTS.reduce((acc, s) => acc + (installed[s.id] ? 1 : 0), 0);
+      if (equippedCount === 0) {
+        const chip = document.createElement('span');
+        chip.className = 'armory-att-chip empty';
+        chip.textContent = 'SIN ACCESORIOS • CONFIGURACIÓN DE FÁBRICA';
+        attSummaryEl.appendChild(chip);
+      } else {
+        for (const s of ATTACHMENT_SLOTS) {
+          const attId = installed[s.id];
+          if (!attId) continue;
+          const att = getAttachmentById(attId);
+          if (!att) continue;
+          const chip = document.createElement('span');
+          chip.className = 'armory-att-chip';
+          chip.textContent = `${s.shortLabel}: ${att.shortName}`;
+          attSummaryEl.appendChild(chip);
+        }
+      }
+    } else {
+      const chip = document.createElement('span');
+      chip.className = 'armory-att-chip empty';
+      chip.textContent = 'PROTOTIPO • SIN RANURAS MODULARES';
+      attSummaryEl.appendChild(chip);
+    }
+  }
+
   const wDef = WEAPONS[w.id];
   if (wDef) {
-    const rpm = Math.round(60 / wDef.fireRate);
-    const dmgDisplay = wDef.pellets > 1 ? `${wDef.damage * wDef.pellets}` : `${wDef.damage}`;
-    const adsPct = Math.round((wDef.adsSpeed / 18) * 100);
-    const mobPct = Math.round(wDef.mobilityMultiplier * 100);
-    $('bar-dmg').style.width = Math.min(100, Math.round((wDef.damage * wDef.pellets) / 120 * 100)) + '%';
+    const effStats = resolveWeaponStats(wDef, effective);
+    const ratings = getArmoryRatings(effStats);
+    const rpm = Math.round(60 / effStats.fireRate);
+    const dmgDisplay = effStats.pellets > 1 ? `${effStats.damage * effStats.pellets}` : `${effStats.damage}`;
+    const mobPct = Math.round(effStats.mobilityMultiplier * 100);
+    $('bar-dmg').style.width = ratings.damage + '%';
     $('val-dmg').textContent = dmgDisplay;
-    $('bar-rpm').style.width = Math.min(100, Math.round(rpm / 1000 * 100)) + '%';
+    $('bar-rpm').style.width = ratings.fireRate + '%';
     $('val-rpm').textContent = rpm + ' RPM';
-    $('bar-ads').style.width = Math.min(100, adsPct) + '%';
-    $('val-ads').textContent = adsPct + '%';
+    $('bar-ads').style.width = Math.min(100, ratings.accuracy) + '%';
+    $('val-ads').textContent = ratings.accuracy + '%';
     $('bar-mob').style.width = Math.min(100, mobPct) + '%';
     $('val-mob').textContent = mobPct + '%';
-    $('bar-mag').style.width = Math.min(100, Math.round(wDef.magSize / 50 * 100)) + '%';
-    $('val-mag').textContent = `${wDef.magSize} / ${wDef.reserveDefault}`;
+    $('bar-mag').style.width = Math.min(100, Math.round(effStats.magSize / 50 * 100)) + '%';
+    $('val-mag').textContent = `${effStats.magSize} / ${effStats.reserveDefault}`;
   } else {
     $('bar-dmg').style.width = '0%'; $('val-dmg').textContent = '--';
     $('bar-rpm').style.width = '0%'; $('val-rpm').textContent = '--';
@@ -560,8 +915,9 @@ function renderInspectedWeapon() {
         if (ok) {
           const curActive = progression.getActiveLoadout();
           if (editingLoadoutId === curActive.id && editingSlot === 'primary') {
-            setWeapon(w.id);
-            setLobbyWeapon(w.id);
+            const primAtt = curActive.weaponAttachments?.[w.id];
+            setWeapon(w.id, { attachments: primAtt });
+            setLobbyWeapon(w.id, primAtt);
           }
           renderLoadoutsBar();
           renderArmoryWeapons();
@@ -580,8 +936,31 @@ function renderInspectedWeapon() {
     }
   }
 
-  setShowcaseWeapon(w.id, { status: w.status, implementation: w.implementation });
-  updateShowcaseContextHUD(w, caliber, curLoadout, isEquippedInSlot);
+  if (btnCustomize) {
+    const canCust = w.implementation === 'IMPLEMENTED' && !!WEAPONS[w.id];
+    const equippedCount = canCust ? Object.values(installed).filter(Boolean).length : 0;
+    btnCustomize.disabled = !canCust;
+    btnCustomize.textContent = equippedCount > 0 ? `PERSONALIZAR (${equippedCount}/5)` : 'PERSONALIZAR';
+    btnCustomize.onclick = () => {
+      if (!canCust) return;
+      setCustomizerOpen(true);
+    };
+  }
+
+  if (customizerOpen) {
+    if (w.implementation !== 'IMPLEMENTED' || !wDef) {
+      setCustomizerOpen(false);
+      return;
+    }
+    renderCustomizer(w, wDef, curLoadout, installed, effective, isPreviewing);
+  }
+
+  setShowcaseWeapon(w.id, {
+    status: w.status,
+    implementation: w.implementation,
+    attachments: w.implementation === 'IMPLEMENTED' ? effective : null
+  });
+  updateShowcaseContextHUD(w, caliber, curLoadout, isEquippedInSlot, effective, isPreviewing);
 }
 
 let currentTab = 'play';
@@ -621,9 +1000,11 @@ function switchTab(tab) {
     }
     setLobbyView('loadout');
   } else {
+    previewAttachment = null;
+    if (customizerOpen) setCustomizerOpen(false);
     const activeDeploy = progression.getActiveLoadout();
     if (activeDeploy && activeDeploy.primary) {
-      setLobbyWeapon(activeDeploy.primary);
+      setLobbyWeapon(activeDeploy.primary, activeDeploy.weaponAttachments?.[activeDeploy.primary]);
     }
     setLobbyView(tab);
   }
@@ -717,7 +1098,9 @@ const combatSession = {
       reloadT: 0,
       reloadStage: 'idle',
       recoil: 0,
-      semiFired: false
+      semiFired: false,
+      attachments: cloneAttachments(null),
+      effectiveStats: null
     },
     secondary: {
       id: 'p12',
@@ -728,7 +1111,9 @@ const combatSession = {
       reloadT: 0,
       reloadStage: 'idle',
       recoil: 0,
-      semiFired: false
+      semiFired: false,
+      attachments: cloneAttachments(null),
+      effectiveStats: null
     }
   }
 };
@@ -749,7 +1134,11 @@ function syncActiveWeaponToSlot() {
 function syncSlotToActiveWeapon(slotKey) {
   const slot = combatSession.slots[slotKey];
   if (!slot || !slot.id) return;
-  setWeapon(slot.id, { preserveState: true });
+  setWeapon(slot.id, {
+    preserveState: true,
+    attachments: slot.attachments,
+    effectiveStats: slot.effectiveStats
+  });
   weapon.ammo = slot.ammo;
   weapon.reserve = slot.reserve;
   weapon.cooldown = slot.cooldown;
@@ -971,13 +1360,20 @@ function shoot() {
   weapon.cooldown = Math.max(0, weapon.cooldown <= 0 ? weapon.cooldown + weapon.fireRate : weapon.fireRate);
   weapon.recoil = Math.min(weapon.recoil + (weapon.recoilKick || 1.0), weapon.recoilMax || 6.0);
   flashTimer = 0.045;
+  const audioOpts = weapon.audioSuppressed ? { suppressed: true } : undefined;
   if (weapon.audio && weapon.audio.shot) {
-    weapon.audio.shot();
+    weapon.audio.shot(audioOpts);
   } else {
-    sfxShot();
+    sfxShot(audioOpts);
   }
   if (weapon.audio && weapon.audio.pump) {
-    setTimeout(() => { if (player.alive) weapon.audio.pump(); }, 280);
+    const shotWpnId = weapon.id;
+    const pumpFn = weapon.audio.pump;
+    setTimeout(() => {
+      if (phase === 'PLAYING' && player.alive && weapon.id === shotWpnId && typeof pumpFn === 'function') {
+        pumpFn();
+      }
+    }, 280);
   }
   syncActiveWeaponToSlot();
 
@@ -1332,6 +1728,10 @@ function startGame(mode) {
   const secId = activeLoadout.secondary || (progression.isWeaponUnlocked('p12', progression.getPlayerInfo().level) ? 'p12' : null);
   const primDef = WEAPONS[primId] || WEAPONS.mk7;
   const secDef = secId ? WEAPONS[secId] : null;
+  const primAtt = cloneAttachments(activeLoadout.weaponAttachments?.[primId]);
+  const secAtt = secId ? cloneAttachments(activeLoadout.weaponAttachments?.[secId]) : cloneAttachments(null);
+  const primStats = resolveWeaponStats(primDef, primAtt);
+  const secStats = secDef ? resolveWeaponStats(secDef, secAtt) : null;
 
   combatSession.activeSlot = 'primary';
   combatSession.switching = false;
@@ -1340,29 +1740,40 @@ function startGame(mode) {
 
   combatSession.slots.primary = {
     id: primId,
-    ammo: primDef.magSize,
-    reserve: (gameMode === 'snd') ? primDef.reserveSnd : primDef.reserveDefault,
+    ammo: primStats.magSize,
+    reserve: (gameMode === 'snd') ? primStats.reserveSnd : primStats.reserveDefault,
     cooldown: 0,
     reloading: false,
     reloadT: 0,
     reloadStage: 'idle',
     recoil: 0,
-    semiFired: false
+    semiFired: false,
+    attachments: primAtt,
+    effectiveStats: primStats
   };
 
   combatSession.slots.secondary = {
     id: secId,
-    ammo: secDef ? secDef.magSize : 0,
-    reserve: secDef ? ((gameMode === 'snd') ? secDef.reserveSnd : secDef.reserveDefault) : 0,
+    ammo: secStats ? secStats.magSize : 0,
+    reserve: secStats ? ((gameMode === 'snd') ? secStats.reserveSnd : secStats.reserveDefault) : 0,
     cooldown: 0,
     reloading: false,
     reloadT: 0,
     reloadStage: 'idle',
     recoil: 0,
-    semiFired: false
+    semiFired: false,
+    attachments: secAtt,
+    effectiveStats: secStats
   };
 
-  setWeapon(primId, { preserveState: false });
+  previewAttachment = null;
+  if (customizerOpen) setCustomizerOpen(false);
+  setWeapon(primId, {
+    preserveState: false,
+    isSnd: gameMode === 'snd',
+    attachments: primAtt,
+    effectiveStats: primStats
+  });
   weapon.ammo = combatSession.slots.primary.ammo;
   weapon.reserve = combatSession.slots.primary.reserve;
   player.vel.set(0, 0, 0);
@@ -1390,6 +1801,7 @@ function startGame(mode) {
     player.yaw = Math.PI;
     snd = null;
     betweenWaves = true; waveDelay = 2.5;
+    $('wave-num').textContent = 'OLEADA 1';
   }
 
   $('menu').style.display = 'none';
@@ -1466,8 +1878,9 @@ function backToMenu() {
   selectMode(selectedMode || 'waves');
   const activeDeploy = progression.getActiveLoadout();
   const equippedId = activeDeploy?.primary || progression.getState().selectedWeapon || 'mk7';
-  setWeapon(equippedId);
-  setLobbyWeapon(equippedId);
+  const depAtt = cloneAttachments(activeDeploy?.weaponAttachments?.[equippedId]);
+  setWeapon(equippedId, { attachments: depAtt });
+  setLobbyWeapon(equippedId, depAtt);
   updatePlayerHeaderUI();
   renderLoadoutsBar();
   $('menu').style.display = 'flex';
@@ -1528,7 +1941,8 @@ function stepSim(dt) {
 
     const adsSpd = weapon.adsSpeed || 12.0;
     adsAmount += ((adsDown ? 1 : 0) - adsAmount) * Math.min(1, dt * adsSpd);
-    camera.fov = settings.fov - 25 * adsAmount;
+    const adsZoom = weapon.adsZoomOffset || 25;
+    camera.fov = settings.fov - adsZoom * adsAmount;
     camera.updateProjectionMatrix();
 
     if (combatSession.switching) {
@@ -1665,11 +2079,13 @@ function stepSim(dt) {
     /* --- fogonazo --- */
     flashTimer -= dt;
     const flashOn = flashTimer > 0;
-    muzzleFlash.intensity = flashOn ? 14 : 0;
+    const flashMult = weapon.muzzleFlashMult ?? 1.0;
+    muzzleFlash.intensity = flashOn ? 14 * flashMult : 0;
     flashSprite.visible = flashOn;
     if (flashOn) {
+      const scBase = flashMult < 0.5 ? 0.35 : 0.7;
       flashSprite.rotation.z = Math.random() * Math.PI * 2;
-      flashSprite.scale.setScalar(0.7 + Math.random() * 0.7);
+      flashSprite.scale.setScalar((scBase + Math.random() * 0.7) * Math.max(0.35, Math.sqrt(flashMult)));
     }
 
     /* --- enemigos --- */
@@ -1915,7 +2331,7 @@ function initShowcaseControls() {
 
   stage.addEventListener('pointerdown', e => {
     if (phase !== 'MENU' || currentTab !== 'loadout') return;
-    if (e.button !== 0 || e.target.closest('#btn-showcase-reset')) return;
+    if (e.button !== 0 || e.target.closest('button')) return;
     dragging = true;
     activePointerId = e.pointerId;
     lastX = e.clientX;
@@ -1961,7 +2377,7 @@ function initShowcaseControls() {
 
   stage.addEventListener('dblclick', e => {
     if (phase !== 'MENU' || currentTab !== 'loadout') return;
-    if (!e.target.closest('#btn-showcase-reset')) {
+    if (!e.target.closest('button')) {
       resetShowcaseView();
     }
   });
@@ -1995,13 +2411,31 @@ window.__bp.getShowcaseState = getShowcaseState;
 window.__bp.getShowcaseScreenBounds = getShowcaseScreenBounds;
 window.__bp.getOperatorScreenBounds = getOperatorScreenBounds;
 window.__bp.getCurrentTab = () => currentTab;
+window.__bp.attachments = {
+  catalog: ATTACHMENT_CATALOG,
+  slots: ATTACHMENT_SLOTS,
+  getAttachmentsForWeapon,
+  canEquipAttachment,
+  resolveWeaponStats,
+  compareWeaponStats,
+  getAttachmentProsCons
+};
+window.__bp.setCustomizerOpen = setCustomizerOpen;
+window.__bp.setPreviewAttachment = (wId, slot, attId) => {
+  previewAttachment = attId ? { weaponId: wId, slot, attachmentId: attId } : null;
+  renderInspectedWeapon();
+};
+window.__bp.areSharedAttachmentGeometriesIntact = () => {
+  return SHARED_ATTACHMENT_GEOMETRIES.every(g => g?.userData?.shared === true && !!g.attributes?.position);
+};
 
 applySettings();
 refreshSettingsUI();
 const activeDeploy = progression.getActiveLoadout();
 const initWeapon = activeDeploy?.primary || progression.getState().selectedWeapon || 'mk7';
-setWeapon(initWeapon);
-setLobbyWeapon(initWeapon);
+const initAtt = cloneAttachments(activeDeploy?.weaponAttachments?.[initWeapon]);
+setWeapon(initWeapon, { attachments: initAtt });
+setLobbyWeapon(initWeapon, initAtt);
 initArmoryUI();
 initShowcaseControls();
 renderLoadoutsBar();
@@ -2011,12 +2445,14 @@ progression.subscribe(() => {
   if (phase === 'MENU') {
     const curDeploy = progression.getActiveLoadout();
     if (curDeploy && curDeploy.primary) {
-      setLobbyWeapon(curDeploy.primary);
+      const depAtt = cloneAttachments(curDeploy.weaponAttachments?.[curDeploy.primary]);
+      setWeapon(curDeploy.primary, { attachments: depAtt });
+      setLobbyWeapon(curDeploy.primary, depAtt);
     }
-  }
-  if (currentTab === 'loadout') {
-    renderLoadoutsBar();
-    renderArmoryWeapons();
+    if (currentTab === 'loadout') {
+      renderLoadoutsBar();
+      renderArmoryWeapons();
+    }
   }
 });
 $('loading').style.display = 'none';

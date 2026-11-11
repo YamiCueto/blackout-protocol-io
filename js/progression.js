@@ -1,5 +1,26 @@
 const STORAGE_KEY = 'bp_progression_v1';
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
+
+export const ATTACHMENT_SLOT_KEYS = ['optic', 'muzzle', 'magazine', 'underbarrel', 'stock'];
+
+let attachmentRuleProvider = null;
+
+export function registerAttachmentRules(provider) {
+  attachmentRuleProvider = provider || null;
+  if (typeof progression !== 'undefined' && progression) {
+    progression.revalidateAttachments();
+  }
+}
+
+export function createEmptyAttachmentMap() {
+  return {
+    optic: null,
+    muzzle: null,
+    magazine: null,
+    underbarrel: null,
+    stock: null
+  };
+}
 
 export const XP_REWARDS = {
   KILL: 100,
@@ -220,15 +241,71 @@ export function isWeaponUnlocked(weaponId, playerLevel) {
   return playerLevel >= w.reqLevel;
 }
 
+const IMPLEMENTED_WEAPON_IDS = WEAPON_CATALOG.filter(w => w.implementation === 'IMPLEMENTED').map(w => w.id);
+
+export function createDefaultWeaponAttachments() {
+  const map = {};
+  for (const wid of IMPLEMENTED_WEAPON_IDS) {
+    map[wid] = createEmptyAttachmentMap();
+  }
+  return map;
+}
+
+function normalizeWeaponAttachmentSlotMap(rawMap, weaponId, weaponLevel) {
+  const out = createEmptyAttachmentMap();
+  if (!rawMap || typeof rawMap !== 'object') return out;
+  for (const slot of ATTACHMENT_SLOT_KEYS) {
+    const val = rawMap[slot];
+    if (typeof val !== 'string' || !val.trim()) {
+      out[slot] = null;
+      continue;
+    }
+    const cleanId = val.trim();
+    if (attachmentRuleProvider && typeof attachmentRuleProvider.validateAttachment === 'function') {
+      out[slot] = attachmentRuleProvider.validateAttachment(weaponId, slot, cleanId, weaponLevel) ? cleanId : null;
+    } else {
+      out[slot] = cleanId;
+    }
+  }
+  return out;
+}
+
+function cloneWeaponAttachmentMaps(waMap) {
+  const out = createDefaultWeaponAttachments();
+  if (!waMap || typeof waMap !== 'object') return out;
+  for (const wid of IMPLEMENTED_WEAPON_IDS) {
+    const src = waMap[wid];
+    if (src && typeof src === 'object') {
+      const slotMap = createEmptyAttachmentMap();
+      for (const slot of ATTACHMENT_SLOT_KEYS) {
+        slotMap[slot] = typeof src[slot] === 'string' && src[slot] ? src[slot] : null;
+      }
+      out[wid] = slotMap;
+    }
+  }
+  return out;
+}
+
+function normalizeLoadoutWeaponAttachments(rawWa, weaponStateMap) {
+  const out = createDefaultWeaponAttachments();
+  if (!rawWa || typeof rawWa !== 'object') return out;
+  for (const wid of IMPLEMENTED_WEAPON_IDS) {
+    const wxp = weaponStateMap?.[wid]?.xp || 0;
+    const wLevel = getWeaponLevelInfo(wxp).level;
+    out[wid] = normalizeWeaponAttachmentSlotMap(rawWa[wid], wid, wLevel);
+  }
+  return out;
+}
+
 export function createDefaultLoadouts(playerLevel = 1) {
   const p12Unlocked = isWeaponUnlocked('p12', playerLevel);
   const now = Date.now();
   return [
-    { id: 'loadout_1', name: DEFAULT_LOADOUT_NAMES[0], primary: 'mk7', secondary: p12Unlocked ? 'p12' : null, updatedAt: now },
-    { id: 'loadout_2', name: DEFAULT_LOADOUT_NAMES[1], primary: 'mk7', secondary: p12Unlocked ? 'p12' : null, updatedAt: now },
-    { id: 'loadout_3', name: DEFAULT_LOADOUT_NAMES[2], primary: 'mk7', secondary: p12Unlocked ? 'p12' : null, updatedAt: now },
-    { id: 'loadout_4', name: DEFAULT_LOADOUT_NAMES[3], primary: 'mk7', secondary: p12Unlocked ? 'p12' : null, updatedAt: now },
-    { id: 'loadout_5', name: DEFAULT_LOADOUT_NAMES[4], primary: 'mk7', secondary: p12Unlocked ? 'p12' : null, updatedAt: now }
+    { id: 'loadout_1', name: DEFAULT_LOADOUT_NAMES[0], primary: 'mk7', secondary: p12Unlocked ? 'p12' : null, weaponAttachments: createDefaultWeaponAttachments(), updatedAt: now },
+    { id: 'loadout_2', name: DEFAULT_LOADOUT_NAMES[1], primary: 'mk7', secondary: p12Unlocked ? 'p12' : null, weaponAttachments: createDefaultWeaponAttachments(), updatedAt: now },
+    { id: 'loadout_3', name: DEFAULT_LOADOUT_NAMES[2], primary: 'mk7', secondary: p12Unlocked ? 'p12' : null, weaponAttachments: createDefaultWeaponAttachments(), updatedAt: now },
+    { id: 'loadout_4', name: DEFAULT_LOADOUT_NAMES[3], primary: 'mk7', secondary: p12Unlocked ? 'p12' : null, weaponAttachments: createDefaultWeaponAttachments(), updatedAt: now },
+    { id: 'loadout_5', name: DEFAULT_LOADOUT_NAMES[4], primary: 'mk7', secondary: p12Unlocked ? 'p12' : null, weaponAttachments: createDefaultWeaponAttachments(), updatedAt: now }
   ];
 }
 
@@ -301,6 +378,7 @@ function validateAndNormalizeState(raw) {
         name,
         primary,
         secondary,
+        weaponAttachments: normalizeLoadoutWeaponAttachments(l?.weaponAttachments, state.weapons),
         updatedAt: sanitizeNumber(l?.updatedAt, Date.now())
       };
     });
@@ -410,6 +488,7 @@ export class ProgressionManager {
       const secondaryUnlocked = l.secondary ? isWeaponUnlocked(l.secondary, pInfo.level) : false;
       return {
         ...l,
+        weaponAttachments: cloneWeaponAttachmentMaps(l.weaponAttachments),
         isSelected,
         primaryWeapon,
         secondaryWeapon,
@@ -417,6 +496,81 @@ export class ProgressionManager {
         secondaryUnlocked
       };
     });
+  }
+
+  revalidateAttachments() {
+    if (!this.state || !Array.isArray(this.state.loadouts)) return false;
+    let changed = false;
+    for (const l of this.state.loadouts) {
+      const before = JSON.stringify(l.weaponAttachments || null);
+      l.weaponAttachments = normalizeLoadoutWeaponAttachments(l.weaponAttachments, this.state.weapons);
+      const after = JSON.stringify(l.weaponAttachments);
+      if (before !== after) changed = true;
+    }
+    if (changed) {
+      this.save();
+      this.notify({ type: 'attachments_revalidated' });
+    }
+    return changed;
+  }
+
+  getLoadoutWeaponAttachments(loadoutId, weaponId) {
+    const target = this.state.loadouts.find(l => l.id === loadoutId) || this.getActiveLoadout();
+    const map = target?.weaponAttachments?.[weaponId];
+    const out = createEmptyAttachmentMap();
+    if (!map || typeof map !== 'object') return out;
+    for (const slot of ATTACHMENT_SLOT_KEYS) {
+      out[slot] = typeof map[slot] === 'string' && map[slot] ? map[slot] : null;
+    }
+    return out;
+  }
+
+  setLoadoutWeaponAttachment(loadoutId, weaponId, slot, attachmentId) {
+    const target = this.state.loadouts.find(l => l.id === loadoutId);
+    if (!target) return { ok: false, reason: 'invalid_loadout' };
+    if (!ATTACHMENT_SLOT_KEYS.includes(slot)) return { ok: false, reason: 'invalid_slot' };
+    if (!IMPLEMENTED_WEAPON_IDS.includes(weaponId)) return { ok: false, reason: 'invalid_weapon' };
+    if (!target.weaponAttachments || typeof target.weaponAttachments !== 'object') {
+      target.weaponAttachments = createDefaultWeaponAttachments();
+    }
+    if (!target.weaponAttachments[weaponId] || typeof target.weaponAttachments[weaponId] !== 'object') {
+      target.weaponAttachments[weaponId] = createEmptyAttachmentMap();
+    }
+    if (attachmentId === null || attachmentId === undefined || attachmentId === '') {
+      target.weaponAttachments[weaponId][slot] = null;
+      target.updatedAt = Date.now();
+      this.save();
+      const attachments = { ...target.weaponAttachments[weaponId] };
+      this.notify({ type: 'attachment_updated', loadoutId, weaponId, slot, attachmentId: null, attachments });
+      return { ok: true, loadoutId, weaponId, slot, attachmentId: null, attachments };
+    }
+    if (!attachmentRuleProvider || typeof attachmentRuleProvider.canEquip !== 'function') {
+      return { ok: false, reason: 'rules_unavailable' };
+    }
+    const wLevel = this.getWeaponInfo(weaponId).level;
+    const check = attachmentRuleProvider.canEquip(weaponId, slot, attachmentId, wLevel);
+    if (!check || !check.ok) {
+      return { ok: false, reason: check?.reason || 'invalid_attachment', requiredLevel: check?.requiredLevel };
+    }
+    target.weaponAttachments[weaponId][slot] = attachmentId;
+    target.updatedAt = Date.now();
+    this.save();
+    const attachments = { ...target.weaponAttachments[weaponId] };
+    this.notify({ type: 'attachment_updated', loadoutId, weaponId, slot, attachmentId, attachments });
+    return { ok: true, loadoutId, weaponId, slot, attachmentId, attachments };
+  }
+
+  clearLoadoutWeaponAttachments(loadoutId, weaponId) {
+    const target = this.state.loadouts.find(l => l.id === loadoutId);
+    if (!target || !IMPLEMENTED_WEAPON_IDS.includes(weaponId)) return false;
+    if (!target.weaponAttachments || typeof target.weaponAttachments !== 'object') {
+      target.weaponAttachments = createDefaultWeaponAttachments();
+    }
+    target.weaponAttachments[weaponId] = createEmptyAttachmentMap();
+    target.updatedAt = Date.now();
+    this.save();
+    this.notify({ type: 'attachments_cleared', loadoutId, weaponId });
+    return true;
   }
 
   getActiveLoadout() {

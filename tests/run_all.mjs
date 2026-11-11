@@ -13,7 +13,8 @@ const suites = [
   { name: 'test_sprint5_closure.mjs', count: 5, desc: 'Cadencia, impactos mixtos M870, recarga interrumpible, persistencia' },
   { name: 'test_memory_deep.mjs', count: 6, desc: 'Acumulador en navegador, anti-burst, 20 swaps, 10 oleadas, 10 S&D, retry' },
   { name: 'test_sprint6.mjs', count: 22, desc: 'Equipamientos personalizados, P-12 Tactical, cambio en combate y regresión' },
-  { name: 'test_sprint6_1.mjs', count: 14, desc: 'Exhibición 3D, barra de categorías tácticas, responsividad, aislamiento y memoria' }
+  { name: 'test_sprint6_1.mjs', count: 14, desc: 'Exhibición 3D, barra de categorías tácticas, responsividad, aislamiento y memoria' },
+  { name: 'test_sprint7.mjs', count: 20, desc: 'Sistema modular de accesorios, personalización 3D, combate, memoria WebGL y migración v3' }
 ];
 
 async function runSuite(suite) {
@@ -69,7 +70,7 @@ console.log('-------------------------------------------------------------------
 console.log(`TOTAL GENERAL: ${passedTests}/${totalTests} PRUEBAS PASADAS (100% OK)`);
 console.log('========================================================================================');
 
-if (passedTests !== totalTests || totalTests !== 104) {
+if (passedTests !== totalTests || totalTests !== 124) {
   process.exit(1);
 } else {
   process.exit(0);

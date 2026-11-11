@@ -196,67 +196,91 @@
         </div>
       </div>
       
-      <div class="armory-cat-bar" id="armory-cat-bar">
-        <button type="button" class="armory-cat-arrow" id="armory-cat-prev" aria-label="Categor&iacute;as anteriores">&#9664;</button>
-        <div class="armory-cat-nav" id="armory-cat-nav"></div>
-        <button type="button" class="armory-cat-arrow" id="armory-cat-next" aria-label="Siguientes categor&iacute;as">&#9654;</button>
+      <div id="armory-browse-body" class="armory-browse-body">
+        <div class="armory-cat-bar" id="armory-cat-bar">
+          <button type="button" class="armory-cat-arrow" id="armory-cat-prev" aria-label="Categor&iacute;as anteriores">&#9664;</button>
+          <div class="armory-cat-nav" id="armory-cat-nav"></div>
+          <button type="button" class="armory-cat-arrow" id="armory-cat-next" aria-label="Siguientes categor&iacute;as">&#9654;</button>
+        </div>
+
+        <div class="armory-weapon-strip" id="armory-weapon-strip"></div>
+
+        <div class="armory-weapon-detail" id="armory-weapon-detail">
+          <div class="armory-header-row">
+            <div>
+              <h2 id="loadout-weapon-name">MK-7 CARBINE</h2>
+              <div class="intel-badge" id="loadout-weapon-type">FUSIL DE ASALTO 5.56&times;45mm NATO</div>
+            </div>
+            <div class="armory-level-chip" id="loadout-weapon-level">NVL 1/20</div>
+          </div>
+
+          <div class="armory-xp-box">
+            <div class="armory-xp-labels">
+              <span class="armory-xp-title">PROGRESO DE ARMA</span>
+              <span class="armory-xp-val" id="loadout-weapon-xp-text">0 / 250 XP</span>
+            </div>
+            <div class="wbar-track armory-xp-track">
+              <div class="wbar-fill armory-xp-fill" id="loadout-weapon-xp-fill" style="width:0%"></div>
+            </div>
+          </div>
+
+          <p id="loadout-weapon-desc">Plataforma t&aacute;ctica 5.56&times;45mm NATO. Balance &oacute;ptimo entre cadencia y control de retroceso.</p>
+
+          <div class="armory-att-summary-row" id="armory-att-summary-row"></div>
+
+          <div class="weapon-bars" id="loadout-weapon-bars">
+            <div class="wbar-row">
+              <span>DA&Ntilde;O</span>
+              <div class="wbar-track"><div class="wbar-fill" id="bar-dmg" style="width:68%"></div></div>
+              <b id="val-dmg">34</b>
+            </div>
+            <div class="wbar-row">
+              <span>CADENCIA</span>
+              <div class="wbar-track"><div class="wbar-fill" id="bar-rpm" style="width:82%"></div></div>
+              <b id="val-rpm">570 RPM</b>
+            </div>
+            <div class="wbar-row">
+              <span>PRECISI&Oacute;N (ADS)</span>
+              <div class="wbar-track"><div class="wbar-fill" id="bar-ads" style="width:85%"></div></div>
+              <b id="val-ads">85%</b>
+            </div>
+            <div class="wbar-row">
+              <span>MOVILIDAD</span>
+              <div class="wbar-track"><div class="wbar-fill" id="bar-mob" style="width:78%"></div></div>
+              <b id="val-mob">78%</b>
+            </div>
+            <div class="wbar-row">
+              <span>CARGADOR</span>
+              <div class="wbar-track"><div class="wbar-fill" id="bar-mag" style="width:60%"></div></div>
+              <b id="val-mag">30 / 120</b>
+            </div>
+          </div>
+
+          <div class="armory-action-bar">
+            <div class="armory-action-btns">
+              <button class="btn-armory" id="btn-equip-weapon">EQUIPADA</button>
+              <button type="button" class="btn-armory-cust" id="btn-customize-weapon">PERSONALIZAR</button>
+            </div>
+            <div class="armory-status-tag" id="loadout-status-tag">EN SERVICIO</div>
+          </div>
+        </div>
       </div>
 
-      <div class="armory-weapon-strip" id="armory-weapon-strip"></div>
-
-      <div class="armory-weapon-detail" id="armory-weapon-detail">
-        <div class="armory-header-row">
-          <div>
-            <h2 id="loadout-weapon-name">MK-7 CARBINE</h2>
-            <div class="intel-badge" id="loadout-weapon-type">FUSIL DE ASALTO 5.56&times;45mm NATO</div>
+      <div id="armory-customizer" class="armory-customizer" style="display:none">
+        <div class="customizer-top-row">
+          <button type="button" class="btn-cust-back" id="btn-cust-back">&larr; ARSENAL</button>
+          <div class="customizer-title-block">
+            <span class="cust-weapon-name" id="cust-weapon-name">MK-7 CARBINE</span>
+            <span class="armory-level-chip" id="cust-weapon-lvl">NVL 1/20</span>
           </div>
-          <div class="armory-level-chip" id="loadout-weapon-level">NVL 1/20</div>
+          <button type="button" class="btn-cust-reset" id="btn-cust-reset">RESTABLECER</button>
         </div>
 
-        <div class="armory-xp-box">
-          <div class="armory-xp-labels">
-            <span class="armory-xp-title">PROGRESO DE ARMA</span>
-            <span class="armory-xp-val" id="loadout-weapon-xp-text">0 / 250 XP</span>
-          </div>
-          <div class="wbar-track armory-xp-track">
-            <div class="wbar-fill armory-xp-fill" id="loadout-weapon-xp-fill" style="width:0%"></div>
-          </div>
-        </div>
+        <div class="cust-slot-tabs" id="cust-slot-tabs"></div>
 
-        <p id="loadout-weapon-desc">Plataforma t&aacute;ctica 5.56&times;45mm NATO. Balance &oacute;ptimo entre cadencia y control de retroceso.</p>
+        <div class="cust-list" id="cust-list"></div>
 
-        <div class="weapon-bars" id="loadout-weapon-bars">
-          <div class="wbar-row">
-            <span>DA&Ntilde;O</span>
-            <div class="wbar-track"><div class="wbar-fill" id="bar-dmg" style="width:68%"></div></div>
-            <b id="val-dmg">34</b>
-          </div>
-          <div class="wbar-row">
-            <span>CADENCIA</span>
-            <div class="wbar-track"><div class="wbar-fill" id="bar-rpm" style="width:82%"></div></div>
-            <b id="val-rpm">570 RPM</b>
-          </div>
-          <div class="wbar-row">
-            <span>PRECISI&Oacute;N (ADS)</span>
-            <div class="wbar-track"><div class="wbar-fill" id="bar-ads" style="width:85%"></div></div>
-            <b id="val-ads">85%</b>
-          </div>
-          <div class="wbar-row">
-            <span>MOVILIDAD</span>
-            <div class="wbar-track"><div class="wbar-fill" id="bar-mob" style="width:78%"></div></div>
-            <b id="val-mob">78%</b>
-          </div>
-          <div class="wbar-row">
-            <span>CARGADOR</span>
-            <div class="wbar-track"><div class="wbar-fill" id="bar-mag" style="width:60%"></div></div>
-            <b id="val-mag">30 / 120</b>
-          </div>
-        </div>
-
-        <div class="armory-action-bar">
-          <button class="btn-armory" id="btn-equip-weapon">EQUIPADA</button>
-          <div class="armory-status-tag" id="loadout-status-tag">EN SERVICIO</div>
-        </div>
+        <div class="cust-diff-box" id="cust-diff-box"></div>
       </div>
     </div>
 
@@ -268,6 +292,7 @@
         </div>
         <div class="showcase-title" id="showcase-title">MK-7 CARBINE</div>
         <div class="showcase-sub" id="showcase-sub">FUSILES DE ASALTO &bull; 5.56 NATO</div>
+        <div class="showcase-att-pills" id="showcase-att-pills"></div>
         <div class="showcase-note" id="showcase-note"></div>
       </div>
 
@@ -288,6 +313,7 @@
           <span class="showcase-diff-hint" id="showcase-diff-hint"></span>
           <div class="showcase-actions">
             <span class="showcase-controls-hint">ARRASTRAR: ROTAR &bull; RUEDA: ZOOM</span>
+            <button type="button" class="btn-showcase-cancel-preview" id="btn-cancel-preview" style="display:none">CANCELAR VISTA PREVIA</button>
             <button type="button" class="btn-showcase-reset" id="btn-showcase-reset">RECENTRAR VISTA</button>
           </div>
         </div>
