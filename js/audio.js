@@ -86,3 +86,52 @@ export function sfxEnemyShot() {
   const g = ac.createGain(); g.gain.setValueAtTime(0.16, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   src.connect(bp).connect(g).connect(masterGain); src.start(t);
 }
+
+export function sfxShotVector() {
+  const ac = audio(), t = ac.currentTime;
+  const dur = 0.14;
+  const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.8);
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const lp = ac.createBiquadFilter(); lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(6500, t); lp.frequency.exponentialRampToValueAtTime(600, t + dur);
+  const g = ac.createGain(); g.gain.setValueAtTime(0.42, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(lp).connect(g).connect(masterGain); src.start(t);
+  const o = ac.createOscillator(); o.type = 'triangle';
+  o.frequency.setValueAtTime(220, t); o.frequency.exponentialRampToValueAtTime(80, t + 0.08);
+  const g2 = ac.createGain(); g2.gain.setValueAtTime(0.38, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+  o.connect(g2).connect(masterGain); o.start(t); o.stop(t + 0.1);
+}
+
+export function sfxReloadVector() {
+  sfxClick(1100, .14, .04);
+  setTimeout(() => sfxClick(800, .15, .05), 180);
+  setTimeout(() => sfxClick(1600, .18, .04), 480);
+}
+
+export function sfxShotShotgun() {
+  const ac = audio(), t = ac.currentTime;
+  const dur = 0.35;
+  const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 1.8);
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const lp = ac.createBiquadFilter(); lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(3200, t); lp.frequency.exponentialRampToValueAtTime(150, t + dur);
+  const g = ac.createGain(); g.gain.setValueAtTime(0.75, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(lp).connect(g).connect(masterGain); src.start(t);
+  const o = ac.createOscillator(); o.type = 'triangle';
+  o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(25, t + 0.18);
+  const g2 = ac.createGain(); g2.gain.setValueAtTime(0.85, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+  o.connect(g2).connect(masterGain); o.start(t); o.stop(t + 0.22);
+}
+
+export function sfxPumpAction() {
+  sfxClick(750, .18, .06);
+  setTimeout(() => sfxClick(1250, .22, .05), 180);
+}
+
+export function sfxShellInsert() {
+  sfxClick(820, .16, .05);
+}

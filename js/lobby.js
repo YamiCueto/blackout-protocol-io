@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { renderer } from './core.js';
 import { texConcrete, texMetal, texCrate } from './textures.js';
+import { buildLobbyWeaponMesh } from './weapon.js';
 
 export const lobbyScene = new THREE.Scene();
 lobbyScene.background = new THREE.Color(0x060911);
@@ -341,31 +342,22 @@ const weaponGroup = new THREE.Group();
 weaponGroup.position.set(0.04, -0.02, 0.36);
 weaponGroup.rotation.set(-0.45, 0.32, -0.38);
 chestGroup.add(weaponGroup);
+weaponGroup.add(buildLobbyWeaponMesh('mk7'));
 
-const gunReceiver = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.14, 0.52), matGun);
-gunReceiver.castShadow = true;
-weaponGroup.add(gunReceiver);
+let currentLobbyWeaponId = 'mk7';
 
-const gunBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.44, 10), matGunMetal);
-gunBarrel.rotation.x = Math.PI / 2;
-gunBarrel.position.set(0, 0.015, 0.46);
-gunBarrel.castShadow = true;
-weaponGroup.add(gunBarrel);
-
-const gunSight = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.14), matGunMetal);
-gunSight.position.set(0, 0.1, 0.02);
-weaponGroup.add(gunSight);
-
-const gunMag = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.12), matGun);
-gunMag.position.set(0, -0.14, 0.06);
-gunMag.rotation.x = -0.22;
-gunMag.castShadow = true;
-weaponGroup.add(gunMag);
-
-const gunStock = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.12, 0.26), matVest);
-gunStock.position.set(0, -0.01, -0.32);
-gunStock.castShadow = true;
-weaponGroup.add(gunStock);
+export function setLobbyWeapon(weaponId) {
+  if (currentLobbyWeaponId === weaponId && weaponGroup.children.length > 0) return;
+  currentLobbyWeaponId = weaponId;
+  while (weaponGroup.children.length > 0) {
+    const child = weaponGroup.children[0];
+    weaponGroup.remove(child);
+    child.traverse(o => {
+      if (o.isMesh && o.geometry) o.geometry.dispose();
+    });
+  }
+  weaponGroup.add(buildLobbyWeaponMesh(weaponId));
+}
 
 let idleTime = 0;
 const targetLook = new THREE.Vector3(0.68, 1.18, 0);

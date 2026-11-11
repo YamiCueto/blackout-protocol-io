@@ -31,8 +31,7 @@ export const WEAPON_CATALOG = [
     desc: 'Plataforma táctica 5.56x45mm NATO. Balance óptimo entre cadencia y control de retroceso.',
     reqLevel: 1,
     implementation: 'IMPLEMENTED',
-    maxLevel: 20,
-    stats: { damage: 34, rpm: 570, ads: 85, mobility: 78, mag: 30 }
+    maxLevel: 20
   },
   {
     id: 'ak12',
@@ -41,8 +40,7 @@ export const WEAPON_CATALOG = [
     desc: 'Fusil de asalto 5.45x39mm con alta pegada balística y retroceso sostenido.',
     reqLevel: 14,
     implementation: 'PLANNED',
-    maxLevel: 20,
-    stats: null
+    maxLevel: 20
   },
   {
     id: 'vector9',
@@ -50,9 +48,8 @@ export const WEAPON_CATALOG = [
     category: 'SMG',
     desc: 'Subfusil compacto de alta cadencia 9x19mm para combate a quemarropa.',
     reqLevel: 4,
-    implementation: 'PLANNED',
-    maxLevel: 20,
-    stats: null
+    implementation: 'IMPLEMENTED',
+    maxLevel: 20
   },
   {
     id: 'mp5k',
@@ -61,8 +58,7 @@ export const WEAPON_CATALOG = [
     desc: 'Arma de defensa personal de 9mm con retroceso dócil y alta maniobrabilidad.',
     reqLevel: 20,
     implementation: 'PLANNED',
-    maxLevel: 20,
-    stats: null
+    maxLevel: 20
   },
   {
     id: 'm870',
@@ -70,9 +66,8 @@ export const WEAPON_CATALOG = [
     category: 'SHOTGUN',
     desc: 'Escopeta táctica corredera calibre 12 para despeje de recintos cerrados.',
     reqLevel: 8,
-    implementation: 'PLANNED',
-    maxLevel: 20,
-    stats: null
+    implementation: 'IMPLEMENTED',
+    maxLevel: 20
   },
   {
     id: 'mk48',
@@ -81,8 +76,7 @@ export const WEAPON_CATALOG = [
     desc: 'Ametralladora ligera 7.62x51mm de supresión con cinta de 100 cartuchos.',
     reqLevel: 24,
     implementation: 'PLANNED',
-    maxLevel: 20,
-    stats: null
+    maxLevel: 20
   },
   {
     id: 'awm338',
@@ -91,8 +85,7 @@ export const WEAPON_CATALOG = [
     desc: 'Fusil de cerrojo calibre .338 Lapua Magnum para eliminación a larga distancia.',
     reqLevel: 30,
     implementation: 'PLANNED',
-    maxLevel: 20,
-    stats: null
+    maxLevel: 20
   },
   {
     id: 'p12',
@@ -101,8 +94,7 @@ export const WEAPON_CATALOG = [
     desc: 'Pistola semiautomática de servicio calibre .45 ACP de alta fiabilidad.',
     reqLevel: 2,
     implementation: 'PLANNED',
-    maxLevel: 20,
-    stats: null
+    maxLevel: 20
   },
   {
     id: 'knife',
@@ -111,8 +103,7 @@ export const WEAPON_CATALOG = [
     desc: 'Hoja fija de combate de acero endurecido para neutralización silenciosa.',
     reqLevel: 1,
     implementation: 'PLANNED',
-    maxLevel: 20,
-    stats: null
+    maxLevel: 20
   }
 ];
 

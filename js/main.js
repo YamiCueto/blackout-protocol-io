@@ -1,14 +1,13 @@
-/* Orquestador: jugador, entrada, disparo, oleadas, HUD, estados y bucle. */
 import * as THREE from 'three';
 import { $, renderer, scene, camera } from './core.js';
 import { settings, SETTINGS_DEFAULTS, saveSettings } from './settings.js';
 import { audio, applyVolume, sfxShot, sfxClick, sfxReload, sfxHurt, sfxEnemyShot, sfxExplosion } from './audio.js';
 import { ARENA, moon, pushOutCircle, pointBlocked, solidMeshes } from './world.js';
 import { spawnTracer, spawnBurst, spawnDecal, updateEffects, resetEffects } from './effects.js';
-import { weapon, gunGroup, muzzleFlash, flashSprite, GUN_HIP, GUN_ADS } from './weapon.js';
+import { weapon, gunGroup, muzzleFlash, flashSprite, GUN_HIP, GUN_ADS, setWeapon, WEAPONS, getDamageWithDropoff } from './weapon.js';
 import { enemies, makeEnemy, damageEnemy, enemyLOS, clearEnemies, updateCorpses } from './enemies.js';
 import { createDiagnostics } from './diagnostics.js';
-import { lobbyScene, lobbyCamera, updateLobby, setLobbyView, setOperatorCamo } from './lobby.js';
+import { lobbyScene, lobbyCamera, updateLobby, setLobbyView, setOperatorCamo, setLobbyWeapon } from './lobby.js';
 import { progression, WEAPON_CATEGORIES } from './progression.js';
 
 /* ---------------- Ajustes: aplicación y UI ---------------- */
@@ -154,7 +153,11 @@ function renderInspectedWeapon() {
   if (nameEl) nameEl.textContent = w.name;
   if (typeEl) {
     const cat = WEAPON_CATEGORIES.find(c => c.id === w.category);
-    typeEl.textContent = (cat ? cat.name : w.category) + (w.stats ? ' • 5.56 NATO' : ' • CLASIFICADO');
+    let caliber = 'CLASIFICADO';
+    if (w.id === 'mk7') caliber = '5.56 NATO';
+    else if (w.id === 'vector9') caliber = '9x19mm NATO';
+    else if (w.id === 'm870') caliber = '12 GAUGE';
+    typeEl.textContent = (cat ? cat.name : w.category) + ' • ' + caliber;
   }
   if (lvlEl) lvlEl.textContent = `NVL ${w.levelInfo.level}/${w.maxLevel}`;
   if (xpFill) xpFill.style.width = Math.round(w.levelInfo.progress * 100) + '%';
@@ -163,17 +166,22 @@ function renderInspectedWeapon() {
   }
   if (descEl) descEl.textContent = w.desc;
 
-  if (w.stats) {
-    $('bar-dmg').style.width = Math.round(w.stats.damage / 50 * 100) + '%';
-    $('val-dmg').textContent = w.stats.damage;
-    $('bar-rpm').style.width = Math.round(w.stats.rpm / 800 * 100) + '%';
-    $('val-rpm').textContent = w.stats.rpm + ' RPM';
-    $('bar-ads').style.width = w.stats.ads + '%';
-    $('val-ads').textContent = w.stats.ads + '%';
-    $('bar-mob').style.width = w.stats.mobility + '%';
-    $('val-mob').textContent = w.stats.mobility + '%';
-    $('bar-mag').style.width = Math.round(w.stats.mag / 50 * 100) + '%';
-    $('val-mag').textContent = w.stats.mag + ' / 120';
+  const wDef = WEAPONS[w.id];
+  if (wDef) {
+    const rpm = Math.round(60 / wDef.fireRate);
+    const dmgDisplay = wDef.pellets > 1 ? `${wDef.damage * wDef.pellets}` : `${wDef.damage}`;
+    const adsPct = Math.round((wDef.adsSpeed / 16) * 100);
+    const mobPct = Math.round(wDef.mobilityMultiplier * 100);
+    $('bar-dmg').style.width = Math.min(100, Math.round((wDef.damage * wDef.pellets) / 120 * 100)) + '%';
+    $('val-dmg').textContent = dmgDisplay;
+    $('bar-rpm').style.width = Math.min(100, Math.round(rpm / 1000 * 100)) + '%';
+    $('val-rpm').textContent = rpm + ' RPM';
+    $('bar-ads').style.width = Math.min(100, adsPct) + '%';
+    $('val-ads').textContent = adsPct + '%';
+    $('bar-mob').style.width = Math.min(100, mobPct) + '%';
+    $('val-mob').textContent = mobPct + '%';
+    $('bar-mag').style.width = Math.min(100, Math.round(wDef.magSize / 50 * 100)) + '%';
+    $('val-mag').textContent = `${wDef.magSize} / ${wDef.reserveDefault}`;
   } else {
     $('bar-dmg').style.width = '0%'; $('val-dmg').textContent = '--';
     $('bar-rpm').style.width = '0%'; $('val-rpm').textContent = '--';
@@ -195,8 +203,13 @@ function renderInspectedWeapon() {
       btnEquip.disabled = false;
       statusTag.textContent = 'LISTA';
       btnEquip.onclick = () => {
-        progression.selectWeapon(w.id);
-        renderArmoryWeapons();
+        const ok = progression.selectWeapon(w.id);
+        if (ok) {
+          setWeapon(w.id);
+          setLobbyWeapon(w.id);
+          renderArmoryWeapons();
+          renderInspectedWeapon();
+        }
       };
     } else if (w.status === 'LOCKED') {
       btnEquip.textContent = 'BLOQUEADA';
@@ -455,73 +468,134 @@ raycaster.far = 300;
 let flashTimer = 0;
 
 function shoot() {
+  if (weapon.reloading) {
+    if (weapon.reloadType === 'shell' && weapon.ammo > 0) {
+      weapon.reloading = false;
+      weapon.reloadStage = 'idle';
+    } else {
+      return;
+    }
+  }
   if (weapon.ammo <= 0) { sfxClick(500, .1, .06); weapon.cooldown = 0.25; return; }
   weapon.ammo--;
   waveStats.shots++;
   weapon.cooldown = weapon.fireRate;
-  weapon.recoil = Math.min(weapon.recoil + 1, 6);
+  weapon.recoil = Math.min(weapon.recoil + (weapon.recoilKick || 1.0), weapon.recoilMax || 6.0);
   flashTimer = 0.045;
-  sfxShot();
+  if (weapon.audio && weapon.audio.shot) {
+    weapon.audio.shot();
+  } else {
+    sfxShot();
+  }
+  if (weapon.audio && weapon.audio.pump) {
+    setTimeout(() => { if (player.alive) weapon.audio.pump(); }, 280);
+  }
 
-  // dispersión
   const ads = adsAmount > 0.6;
-  const spread = (ads ? 0.0022 : 0.011) + weapon.recoil * (ads ? 0.0012 : 0.0035);
-  const dir = new THREE.Vector3(0, 0, -1)
-    .applyQuaternion(camera.quaternion)
-    .add(new THREE.Vector3((Math.random() - .5) * spread * 2, (Math.random() - .5) * spread * 2, 0).applyQuaternion(camera.quaternion))
-    .normalize();
-
-  raycaster.set(camera.getWorldPosition(new THREE.Vector3()), dir);
-  const targets = [];
-  for (const e of enemies) if (e.alive) targets.push(e.group);
-  const hitsE = raycaster.intersectObjects(targets, true);
-  const hitsW = raycaster.intersectObjects(solidMeshes(), false);
+  const baseSpread = ads ? (weapon.spreadAds || 0.0022) : (weapon.spreadHip || 0.011);
+  const recoilSpread = ads ? (weapon.recoilSpreadAds || 0.0012) : (weapon.recoilSpreadHip || 0.0035);
+  const spread = baseSpread + weapon.recoil * recoilSpread;
 
   const muzzleWorld = new THREE.Vector3();
   flashSprite.getWorldPosition(muzzleWorld);
+  const camPos = camera.getWorldPosition(new THREE.Vector3());
 
-  let end = raycaster.ray.at(120, new THREE.Vector3());
-  const eDist = hitsE.length ? hitsE[0].distance : Infinity;
-  const wDist = hitsW.length ? hitsW[0].distance : Infinity;
+  const targets = [];
+  for (const e of enemies) if (e.alive) targets.push(e.group);
+  const solid = solidMeshes();
+  const pellets = weapon.pellets || 1;
+  const damagedEnemies = new Map();
+  let anyHit = false;
+  let anyHeadshot = false;
 
-  if (eDist < wDist) {
-    const h = hitsE[0];
-    end = h.point;
-    let enemy = null, o = h.object;
-    while (o && !enemy) { if (o.userData.enemy) enemy = o.userData.enemy; o = o.parent; }
-    if (enemy) {
-      const headshot = h.object.userData.head === true;
-      const dmg = headshot ? weapon.damage * 2.2 : weapon.damage;
-      const killed = damageEnemy(enemy, dmg, h.point, headshot, dir);
-      waveStats.hits++;
-      waveStats.dealt += Math.round(dmg);
-      if (killed) {
-        kills++; $('kills').textContent = kills;
-        waveStats.kills++;
-        if (headshot) { waveStats.headshots++; showHeadshotBanner(); }
-        const curWeapon = progression.getState().selectedWeapon || 'mk7';
-        const kRes = progression.recordKill(curWeapon, headshot);
-        updatePlayerHeaderUI();
-        if (kRes && kRes.playerResult) {
-          flashMsg(headshot ? `+${kRes.playerResult.xpGained} XP (HEADSHOT)` : `+${kRes.playerResult.xpGained} XP`);
+  for (let i = 0; i < pellets; i++) {
+    const pSpreadX = (Math.random() - 0.5) * spread * 2;
+    const pSpreadY = (Math.random() - 0.5) * spread * 2;
+    const dir = new THREE.Vector3(0, 0, -1)
+      .applyQuaternion(camera.quaternion)
+      .add(new THREE.Vector3(pSpreadX, pSpreadY, 0).applyQuaternion(camera.quaternion))
+      .normalize();
+
+    raycaster.set(camPos, dir);
+    const hitsE = raycaster.intersectObjects(targets, true);
+    const hitsW = raycaster.intersectObjects(solid, false);
+
+    let end = raycaster.ray.at(120, new THREE.Vector3());
+    const eDist = hitsE.length ? hitsE[0].distance : Infinity;
+    const wDist = hitsW.length ? hitsW[0].distance : Infinity;
+
+    if (eDist < wDist) {
+      const h = hitsE[0];
+      end = h.point;
+      let enemy = null, o = h.object;
+      while (o && !enemy) { if (o.userData.enemy) enemy = o.userData.enemy; o = o.parent; }
+      if (enemy) {
+        anyHit = true;
+        const headshot = h.object.userData.head === true;
+        if (headshot) anyHeadshot = true;
+        const dmg = getDamageWithDropoff(weapon, eDist, headshot);
+        if (!damagedEnemies.has(enemy)) {
+          damagedEnemies.set(enemy, {
+            totalDmg: dmg,
+            lastPoint: h.point,
+            isHeadshot: headshot,
+            dir: dir
+          });
+        } else {
+          const rec = damagedEnemies.get(enemy);
+          rec.totalDmg += dmg;
+          rec.lastPoint = h.point;
+          if (headshot) rec.isHeadshot = true;
         }
       }
-      showHitmarker(headshot);
+    } else if (wDist < Infinity) {
+      const h = hitsW[0];
+      end = h.point;
+      const n = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : new THREE.Vector3(0, 1, 0);
+      spawnBurst(h.point, 0xffc36b, 7, 3.2, 0.1, 0.4);
+      spawnDecal(h.point, n);
     }
-  } else if (wDist < Infinity) {
-    const h = hitsW[0];
-    end = h.point;
-    const n = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : new THREE.Vector3(0, 1, 0);
-    spawnBurst(h.point, 0xffc36b, 7, 3.2, 0.1, 0.4);
-    spawnDecal(h.point, n);
+    spawnTracer(muzzleWorld, end);
   }
-  spawnTracer(muzzleWorld, end);
+
+  if (anyHit) {
+    showHitmarker(anyHeadshot);
+  }
+
+  for (const [enemy, hitData] of damagedEnemies) {
+    const killed = damageEnemy(enemy, hitData.totalDmg, hitData.lastPoint, hitData.isHeadshot, hitData.dir);
+    waveStats.hits++;
+    waveStats.dealt += Math.round(hitData.totalDmg);
+    if (killed) {
+      kills++;
+      $('kills').textContent = kills;
+      waveStats.kills++;
+      if (hitData.isHeadshot) {
+        waveStats.headshots++;
+        showHeadshotBanner();
+      }
+      const curWeapon = progression.getState().selectedWeapon || 'mk7';
+      const kRes = progression.recordKill(curWeapon, hitData.isHeadshot);
+      updatePlayerHeaderUI();
+      if (kRes && kRes.playerResult) {
+        flashMsg(hitData.isHeadshot ? `+${kRes.playerResult.xpGained} XP (HEADSHOT)` : `+${kRes.playerResult.xpGained} XP`);
+      }
+    }
+  }
 }
 
 function tryReload() {
   if (!player.alive || weapon.reloading || weapon.ammo >= weapon.magSize || weapon.reserve <= 0) return;
-  weapon.reloading = true; weapon.reloadT = 0;
-  sfxReload();
+  weapon.reloading = true;
+  weapon.reloadT = 0;
+  if (weapon.reloadType === 'shell') {
+    weapon.reloadStage = 'start';
+  }
+  if (weapon.audio && weapon.audio.reload) {
+    weapon.audio.reload();
+  } else {
+    sfxReload();
+  }
 }
 
 /* ---------------- Oleadas y estadísticas ---------------- */
@@ -694,7 +768,8 @@ function updateHUD() {
   $('health-fill').style.background = player.hp > 40
     ? 'linear-gradient(90deg,#b7ff4a,#4caf50)'
     : 'linear-gradient(90deg,#ff5a3c,#c62828)';
-  $('ammo-num').textContent = weapon.reloading ? '--' : weapon.ammo;
+  const isReloadingMag = weapon.reloading && weapon.reloadType !== 'shell';
+  $('ammo-num').textContent = isReloadingMag ? '--' : weapon.ammo;
   $('ammo-reserve').textContent = '/ ' + weapon.reserve;
   $('reload-hint').style.opacity = (!weapon.reloading && weapon.ammo === 0 && weapon.reserve > 0) ? 1 : 0;
   const alive = enemies.filter(e => e.alive).length;
@@ -734,12 +809,16 @@ function startGame(mode) {
   $('menu').classList.remove('paused');
   resetWaveStats();
 
+  const equippedId = progression.getState().selectedWeapon || 'mk7';
+  setWeapon(equippedId);
   player.vel.set(0, 0, 0);
   player.pitch = 0;
   player.hp = 100; player.alive = true;
-  weapon.ammo = weapon.magSize; weapon.reserve = 120;
+  weapon.ammo = weapon.magSize;
+  weapon.reserve = (gameMode === 'snd') ? weapon.reserveSnd : weapon.reserveDefault;
   weapon.reloading = false; weapon.recoil = 0;
   weapon.cooldown = 0; weapon.reloadT = 0;
+  weapon.reloadStage = 'idle';
   gunGroup.rotation.set(0, 0, 0);
   gunGroup.position.copy(GUN_HIP);
   muzzleFlash.intensity = 0;
@@ -748,11 +827,10 @@ function startGame(mode) {
 
   if (gameMode === 'snd') {
     player.pos.set(0, 1.7, 18);
-    player.yaw = 0; // mirando hacia la bomba
+    player.yaw = 0;
     snd = { timeLeft: SND_DURATION, defuse: 0, spawnTimer: 1, beepT: 0, sparkT: 0, startT: matchTime, ended: false, spawned: 0 };
     createBomb();
     betweenWaves = false;
-    weapon.reserve = 150;
     $('wave-num').textContent = 'DETONACIÓN ' + fmtTime(SND_DURATION);
     flashMsg('DEFIENDE LA BOMBA');
   } else {
@@ -833,6 +911,9 @@ function backToMenu() {
   $('modes').style.display = 'flex';
   switchTab('play');
   selectMode(selectedMode || 'waves');
+  const equippedId = progression.getState().selectedWeapon || 'mk7';
+  setWeapon(equippedId);
+  setLobbyWeapon(equippedId);
   updatePlayerHeaderUI();
   renderArmoryWeapons();
   renderInspectedWeapon();
@@ -872,7 +953,8 @@ function stepSim(dt) {
     matchTime += dt;
     /* --- movimiento --- */
     const sprint = keys['ShiftLeft'] && !adsDown;
-    const speed = sprint ? 8.2 : 5.2;
+    const mobMult = weapon.mobilityMultiplier || 1.0;
+    const speed = (sprint ? 8.2 : 5.2) * mobMult;
     const f = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
     const r = new THREE.Vector3(-f.z, 0, f.x);
     const wish = new THREE.Vector3();
@@ -882,33 +964,74 @@ function stepSim(dt) {
     if (keys['KeyA']) wish.sub(r);
     const moving = wish.lengthSq() > 0;
     if (moving) wish.normalize().multiplyScalar(speed);
-    // aceleración suave
     player.vel.x += (wish.x - player.vel.x) * Math.min(1, dt * 11);
     player.vel.z += (wish.z - player.vel.z) * Math.min(1, dt * 11);
 
-    // salto / gravedad
     if (keys['Space'] && player.grounded) { player.vel.y = 6.5; player.grounded = false; }
     player.vel.y -= 19 * dt;
     player.pos.addScaledVector(player.vel, dt);
     if (player.pos.y <= player.eye) { player.pos.y = player.eye; player.vel.y = 0; player.grounded = true; }
     collidePlayer(player.pos);
 
-    /* --- ADS / FOV --- */
-    adsAmount += ((adsDown ? 1 : 0) - adsAmount) * Math.min(1, dt * 12);
+    const adsSpd = weapon.adsSpeed || 12.0;
+    adsAmount += ((adsDown ? 1 : 0) - adsAmount) * Math.min(1, dt * adsSpd);
     camera.fov = settings.fov - 25 * adsAmount;
     camera.updateProjectionMatrix();
 
-    /* --- disparo --- */
     weapon.cooldown -= dt;
-    if (mouseDown && !weapon.reloading && weapon.cooldown <= 0) shoot();
-    weapon.recoil = Math.max(0, weapon.recoil - dt * 9);
+    if (mouseDown && weapon.cooldown <= 0) {
+      if (!weapon.reloading || (weapon.reloadType === 'shell' && weapon.ammo > 0)) {
+        shoot();
+      }
+    }
+    const recRec = weapon.recoilRecovery || 9.0;
+    weapon.recoil = Math.max(0, weapon.recoil - dt * recRec);
     if (weapon.reloading) {
       weapon.reloadT += dt;
-      if (weapon.reloadT >= weapon.reloadTime) {
-        const need = weapon.magSize - weapon.ammo;
-        const take = Math.min(need, weapon.reserve);
-        weapon.ammo += take; weapon.reserve -= take;
-        weapon.reloading = false;
+      if (weapon.reloadType === 'shell') {
+        const sr = weapon.shellReload || { start: 0.35, shell: 0.48, end: 0.35 };
+        if (weapon.reloadStage === 'start') {
+          if (weapon.reloadT >= sr.start) {
+            weapon.reloadStage = 'shell';
+            weapon.reloadT = 0;
+            if (weapon.ammo < weapon.magSize && weapon.reserve > 0) {
+              weapon.ammo++;
+              weapon.reserve--;
+              if (weapon.audio && weapon.audio.shell) weapon.audio.shell();
+            }
+            if (weapon.ammo >= weapon.magSize || weapon.reserve <= 0) {
+              weapon.reloadStage = 'end';
+              weapon.reloadT = 0;
+            }
+          }
+        } else if (weapon.reloadStage === 'shell') {
+          if (weapon.reloadT >= sr.shell) {
+            weapon.reloadT = 0;
+            if (weapon.ammo < weapon.magSize && weapon.reserve > 0) {
+              weapon.ammo++;
+              weapon.reserve--;
+              if (weapon.audio && weapon.audio.shell) weapon.audio.shell();
+            }
+            if (weapon.ammo >= weapon.magSize || weapon.reserve <= 0) {
+              weapon.reloadStage = 'end';
+              weapon.reloadT = 0;
+            }
+          }
+        } else if (weapon.reloadStage === 'end') {
+          if (weapon.reloadT >= sr.end) {
+            weapon.reloading = false;
+            weapon.reloadStage = 'idle';
+            if (weapon.audio && weapon.audio.pump) weapon.audio.pump();
+          }
+        }
+      } else {
+        if (weapon.reloadT >= weapon.reloadTime) {
+          const need = weapon.magSize - weapon.ammo;
+          const take = Math.min(need, weapon.reserve);
+          weapon.ammo += take;
+          weapon.reserve -= take;
+          weapon.reloading = false;
+        }
       }
     }
 
@@ -933,9 +1056,15 @@ function stepSim(dt) {
     target.y += bobY * 0.6;
     target.z += weapon.recoil * 0.013;
     if (weapon.reloading) {
-      const t = weapon.reloadT / weapon.reloadTime;
-      target.y -= Math.sin(t * Math.PI) * 0.22;
-      gunGroup.rotation.x = -Math.sin(t * Math.PI) * 0.8;
+      if (weapon.reloadType === 'shell') {
+        target.y -= 0.12;
+        gunGroup.rotation.x = -0.35 + Math.sin(weapon.reloadT * 8) * 0.08;
+        gunGroup.rotation.z = 0.25;
+      } else {
+        const t = weapon.reloadT / weapon.reloadTime;
+        target.y -= Math.sin(t * Math.PI) * 0.22;
+        gunGroup.rotation.x = -Math.sin(t * Math.PI) * 0.8;
+      }
     } else {
       gunGroup.rotation.x += (weapon.recoil * 0.02 - gunGroup.rotation.x) * Math.min(1, dt * 14);
     }
@@ -1186,9 +1315,17 @@ const diagnostics = createDiagnostics(renderer, scene, () => {
 
 window.__bp = window.__bp || {};
 window.__bp.progression = progression;
+window.__bp.weapon = weapon;
+window.__bp.WEAPONS = WEAPONS;
+window.__bp.setWeapon = setWeapon;
+window.__bp.shoot = shoot;
+window.__bp.tryReload = tryReload;
 
 applySettings();
 refreshSettingsUI();
+const initWeapon = progression.getState().selectedWeapon || 'mk7';
+setWeapon(initWeapon);
+setLobbyWeapon(initWeapon);
 initArmoryUI();
 updatePlayerHeaderUI();
 progression.subscribe(() => {
