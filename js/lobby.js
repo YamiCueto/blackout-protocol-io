@@ -346,6 +346,10 @@ weaponGroup.add(buildLobbyWeaponMesh('mk7'));
 
 let currentLobbyWeaponId = 'mk7';
 
+export function getLobbyWeaponId() {
+  return currentLobbyWeaponId;
+}
+
 export function setLobbyWeapon(weaponId) {
   if (currentLobbyWeaponId === weaponId && weaponGroup.children.length > 0) return;
   currentLobbyWeaponId = weaponId;

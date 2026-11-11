@@ -135,3 +135,39 @@ export function sfxPumpAction() {
 export function sfxShellInsert() {
   sfxClick(820, .16, .05);
 }
+
+export function sfxShotPistol() {
+  const ac = audio(), t = ac.currentTime;
+  const dur = 0.16;
+  const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.4);
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const lp = ac.createBiquadFilter(); lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(4200, t); lp.frequency.exponentialRampToValueAtTime(400, t + dur);
+  const g = ac.createGain(); g.gain.setValueAtTime(0.55, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(lp).connect(g).connect(masterGain); src.start(t);
+  const o = ac.createOscillator(); o.type = 'triangle';
+  o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(50, t + 0.09);
+  const g2 = ac.createGain(); g2.gain.setValueAtTime(0.45, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+  o.connect(g2).connect(masterGain); o.start(t); o.stop(t + 0.11);
+}
+
+export function sfxReloadPistol() {
+  sfxClick(1050, .14, .04);
+  setTimeout(() => sfxClick(750, .16, .05), 200);
+  setTimeout(() => sfxClick(1500, .18, .04), 450);
+}
+
+export function sfxWeaponSwap() {
+  const ac = audio(), t = ac.currentTime;
+  const dur = 0.18;
+  const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3.0);
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1800;
+  const g = ac.createGain(); g.gain.setValueAtTime(0.18, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(bp).connect(g).connect(masterGain); src.start(t);
+  setTimeout(() => sfxClick(1200, .12, .03), 80);
+}

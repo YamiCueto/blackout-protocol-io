@@ -8,7 +8,10 @@ import {
   sfxReloadVector,
   sfxShotShotgun,
   sfxPumpAction,
-  sfxShellInsert
+  sfxShellInsert,
+  sfxShotPistol,
+  sfxReloadPistol,
+  sfxWeaponSwap
 } from './audio.js';
 
 export const GUN_HIP = new THREE.Vector3(0.28, -0.26, -0.55);
@@ -120,6 +123,32 @@ function buildM870Mesh() {
   return g;
 }
 
+function buildP12Mesh() {
+  const g = new THREE.Group();
+  const slide = new THREE.Mesh(new THREE.BoxGeometry(0.046, 0.065, 0.28), dark2);
+  slide.position.set(0, 0.015, -0.05);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.26, 10), metal);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0, 0.015, -0.16);
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.05, 0.22), dark);
+  frame.position.set(0, -0.025, -0.03);
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.14, 0.065), grip);
+  handle.position.set(0, -0.10, 0.04);
+  handle.rotation.x = -0.28;
+  const triggerGuard = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.045, 0.07), dark);
+  triggerGuard.position.set(0, -0.065, -0.035);
+  const sightF = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.02, 0.01), dark);
+  sightF.position.set(0, 0.055, -0.17);
+  const sightR = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.02, 0.012), dark);
+  sightR.position.set(0, 0.055, 0.07);
+
+  for (const m of [slide, barrel, frame, handle, triggerGuard, sightF, sightR]) {
+    m.castShadow = true;
+    g.add(m);
+  }
+  return g;
+}
+
 export const WEAPONS = {
   mk7: {
     id: 'mk7',
@@ -221,6 +250,40 @@ export const WEAPONS = {
       reload: sfxPumpAction
     },
     buildMesh: buildM870Mesh
+  },
+  p12: {
+    id: 'p12',
+    name: 'P-12 TACTICAL',
+    category: 'PISTOL',
+    slot: 'secondary',
+    damage: 38,
+    pellets: 1,
+    fireRate: 0.18,
+    fireMode: 'semi',
+    magSize: 12,
+    reserveDefault: 48,
+    reserveSnd: 60,
+    reloadType: 'magazine',
+    reloadTime: 1.20,
+    shellReload: null,
+    dropoff: { optimal: 12, max: 32, minMult: 0.45 },
+    spreadHip: 0.014,
+    spreadAds: 0.0028,
+    recoilSpreadHip: 0.0038,
+    recoilSpreadAds: 0.0014,
+    recoilKick: 1.4,
+    recoilMax: 4.8,
+    recoilRecovery: 11.0,
+    mobilityMultiplier: 1.12,
+    adsSpeed: 18.0,
+    hipPos: new THREE.Vector3(0.24, -0.24, -0.44),
+    adsPos: new THREE.Vector3(0, -0.155, -0.34),
+    muzzlePos: new THREE.Vector3(0, 0.015, -0.42),
+    audio: {
+      shot: sfxShotPistol,
+      reload: sfxReloadPistol
+    },
+    buildMesh: buildP12Mesh
   }
 };
 
@@ -283,24 +346,27 @@ export const weapon = {
   }
 };
 
-export function setWeapon(id) {
+export function setWeapon(id, options = {}) {
   const def = WEAPONS[id] || WEAPONS.mk7;
   const isSameMesh = weapon.id === def.id && weaponMeshSubGroup.children.length > 0;
   weapon.id = def.id;
   weapon.name = def.name;
   weapon.category = def.category;
   weapon.magSize = def.magSize;
-  weapon.ammo = def.magSize;
-  weapon.reserve = def.reserveDefault;
+  if (!options.preserveState) {
+    weapon.ammo = def.magSize;
+    weapon.reserve = def.reserveDefault;
+    weapon.cooldown = 0;
+    weapon.reloading = false;
+    weapon.reloadT = 0;
+    weapon.reloadStage = 'idle';
+  }
   weapon.reserveDefault = def.reserveDefault;
   weapon.reserveSnd = def.reserveSnd;
   weapon.fireRate = def.fireRate;
-  weapon.cooldown = 0;
-  weapon.reloading = false;
   weapon.reloadTime = def.reloadTime;
-  weapon.reloadT = 0;
   weapon.damage = def.damage;
-  weapon.recoil = 0;
+  weapon.recoil = options.preserveState ? (weapon.recoil || 0) : 0;
   weapon.pellets = def.pellets;
   weapon.fireMode = def.fireMode;
   weapon.dropoff = def.dropoff;
@@ -315,7 +381,6 @@ export function setWeapon(id) {
   weapon.adsSpeed = def.adsSpeed;
   weapon.reloadType = def.reloadType;
   weapon.shellReload = def.shellReload;
-  weapon.reloadStage = 'idle';
   weapon.interruptReload = false;
   weapon.pumped = true;
   weapon.audio = def.audio;
@@ -352,7 +417,7 @@ export function getDamageWithDropoff(wpn, dist, isHeadshot) {
       mult = 1.0 - t * (1.0 - d.minMult);
     }
   }
-  const headMult = wpn.id === 'm870' ? 1.5 : 2.2;
+  const headMult = (wpn.id === 'm870' || wpn.id === 'p12') ? 1.5 : 2.2;
   const base = wpn.damage * mult;
   return isHeadshot ? base * headMult : base;
 }
@@ -401,6 +466,21 @@ export function buildLobbyWeaponMesh(id) {
     stock.position.set(0, -0.02, -0.32);
     stock.castShadow = true;
     grp.add(stock);
+  } else if (id === 'p12') {
+    const slide = new THREE.Mesh(new THREE.BoxGeometry(0.046, 0.065, 0.28), matM);
+    slide.position.set(0, 0.02, 0.05);
+    slide.castShadow = true;
+    grp.add(slide);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.24, 8), matM);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, 0.02, 0.16);
+    barrel.castShadow = true;
+    grp.add(barrel);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.13, 0.065), matV);
+    handle.position.set(0, -0.07, -0.03);
+    handle.rotation.x = -0.25;
+    handle.castShadow = true;
+    grp.add(handle);
   } else {
     const rec = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.14, 0.52), matG);
     rec.castShadow = true;

@@ -17,8 +17,10 @@
     <div id="health-bar"><div id="health-fill"></div></div>
   </div>
   <div class="panel" id="ammo-panel">
+    <div id="weapon-slot-badge" class="hud-slot-badge">[ 1 ] PRINCIPAL</div>
     <div id="weapon-name">MK-7 Carbine</div>
     <div><span id="ammo-num">30</span> <span id="ammo-reserve">/ 120</span></div>
+    <div id="sec-preview" class="hud-sec-preview"><span id="sec-slot-name">P-12</span> <span id="sec-slot-ammo">12 / 48</span></div>
   </div>
   <div class="panel" id="wave-panel">
     <div id="wave-num">OLEADA 1</div>
@@ -174,6 +176,25 @@
   <div id="tab-loadout" class="lobby-view" style="display:none">
     <div class="dossier-panel loadout-panel">
       <div class="intel-tag">// ARSENAL T&Aacute;CTICO &bull; ARMAMENTO Y PROGRESI&Oacute;N</div>
+
+      <div class="loadouts-management-bar" id="loadouts-bar">
+        <div class="loadout-slot-selector" id="loadout-slot-selector"></div>
+        <div class="loadout-meta-row">
+          <input type="text" id="loadout-name-input" class="loadout-name-input" maxlength="24" placeholder="NOMBRE DE CLASE">
+          <button id="btn-select-loadout" class="btn-loadout-deploy">DESPLEGAR CON ESTA CLASE</button>
+          <span id="loadout-deploy-status" class="badge-deploy-status">SELECCIONADA</span>
+        </div>
+        <div class="loadout-weapon-slots" id="loadout-weapon-slots">
+          <button class="slot-select-btn active" data-slot="primary" id="btn-slot-primary">
+            <span class="slot-tag">[ 1 ] PRINCIPAL</span>
+            <b id="slot-primary-val">MK-7 CARBINE</b>
+          </button>
+          <button class="slot-select-btn" data-slot="secondary" id="btn-slot-secondary">
+            <span class="slot-tag">[ 2 ] SECUNDARIA</span>
+            <b id="slot-secondary-val">P-12 TACTICAL</b>
+          </button>
+        </div>
+      </div>
       
       <div class="armory-cat-nav" id="armory-cat-nav"></div>
 
@@ -249,6 +270,7 @@
     <b>Click der.</b><span>Mira (ADS)</span>
     <b>Shift</b><span>Correr</span>
     <b>Espacio</b><span>Saltar / Desplegar</span>
+    <b>1 / 2</b><span>Arma Principal / Secundaria</span>
     <b>R</b><span>Recargar</span>
     <b>Esc</b><span>Pausa</span>
   </div>
