@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { renderer } from './core.js';
 import { texConcrete, texMetal, texCrate } from './textures.js';
-import { buildLobbyWeaponMesh } from './weapon.js';
+import { buildLobbyWeaponMesh, buildShowcaseWeaponMesh, disposeHierarchyGeometries } from './weapon.js';
 
 export const lobbyScene = new THREE.Scene();
 lobbyScene.background = new THREE.Color(0x060911);
@@ -14,6 +14,13 @@ lobbyScene.add(lobbyCamera);
 addEventListener('resize', () => {
   lobbyCamera.aspect = innerWidth / innerHeight;
   lobbyCamera.updateProjectionMatrix();
+  recomputeShowcaseFraming(false);
+  if (currentLobbyView === 'loadout') {
+    applyShowcaseCameraTargets(showcaseState.zoom);
+    lobbyCamera.position.copy(targetCam);
+    curLook.copy(targetLook);
+    lobbyCamera.lookAt(curLook);
+  }
 });
 
 const floorTex = texConcrete.clone();
@@ -356,28 +363,360 @@ export function setLobbyWeapon(weaponId) {
   while (weaponGroup.children.length > 0) {
     const child = weaponGroup.children[0];
     weaponGroup.remove(child);
-    child.traverse(o => {
-      if (o.isMesh && o.geometry) o.geometry.dispose();
-    });
+    disposeHierarchyGeometries(child);
   }
   weaponGroup.add(buildLobbyWeaponMesh(weaponId));
 }
 
+const SHOWCASE_ORIGIN = new THREE.Vector3(-0.15, 1.48, 0.55);
+const DEFAULT_SHOWCASE_YAW = -0.34;
+const DEFAULT_SHOWCASE_PITCH = 0.08;
+const SHOWCASE_VIEW_DIR = new THREE.Vector3(0.06, -0.09, -0.994).normalize();
+const SHOWCASE_UP = new THREE.Vector3(0, 1, 0);
+const SHOWCASE_RIGHT = new THREE.Vector3().crossVectors(SHOWCASE_VIEW_DIR, SHOWCASE_UP).normalize();
+const SHOWCASE_CAM_UP = new THREE.Vector3().crossVectors(SHOWCASE_RIGHT, SHOWCASE_VIEW_DIR).normalize();
+
+const SHOWCASE_SPANS = {
+  p12: 0.72,
+  knife: 0.68,
+  vector9: 1.15,
+  mp5k: 1.08,
+  mk7: 1.42,
+  ak12: 1.44,
+  m870: 1.48,
+  mk48: 1.50,
+  awm338: 1.54
+};
+
+const showcaseRoot = new THREE.Group();
+showcaseRoot.position.copy(SHOWCASE_ORIGIN);
+showcaseRoot.visible = false;
+lobbyScene.add(showcaseRoot);
+
+const showcasePivot = new THREE.Group();
+showcasePivot.rotation.order = 'XYZ';
+showcasePivot.rotation.set(DEFAULT_SHOWCASE_PITCH, DEFAULT_SHOWCASE_YAW, 0);
+showcaseRoot.add(showcasePivot);
+
+const showcaseHolder = new THREE.Group();
+showcasePivot.add(showcaseHolder);
+
+const showcaseLights = new THREE.Group();
+showcaseLights.visible = false;
+lobbyScene.add(showcaseLights);
+
+const studioTarget = new THREE.Object3D();
+studioTarget.position.copy(SHOWCASE_ORIGIN);
+showcaseLights.add(studioTarget);
+
+const studioKey = new THREE.DirectionalLight(0xf8fafc, 3.35);
+studioKey.position.set(-0.4, 2.2, 3.8);
+studioKey.target = studioTarget;
+showcaseLights.add(studioKey);
+
+const studioBackBounce = new THREE.DirectionalLight(0xcbd5e1, 2.35);
+studioBackBounce.position.set(1.1, -0.45, -2.8);
+studioBackBounce.target = studioTarget;
+showcaseLights.add(studioBackBounce);
+
+const studioRim = new THREE.PointLight(0x38bdf8, 9.5, 6.5, 2);
+studioRim.position.set(-0.15, 2.45, -0.85);
+showcaseLights.add(studioRim);
+
+const showcaseState = {
+  weaponId: 'mk7',
+  status: 'UNLOCKED',
+  implementation: 'IMPLEMENTED',
+  scale: 1,
+  halfW: 0.72,
+  halfH: 0.24,
+  halfD: 0.14,
+  yaw: DEFAULT_SHOWCASE_YAW,
+  pitch: DEFAULT_SHOWCASE_PITCH,
+  targetYaw: DEFAULT_SHOWCASE_YAW,
+  targetPitch: DEFAULT_SHOWCASE_PITCH,
+  zoom: 2.35,
+  targetZoom: 2.35,
+  baseZoom: 2.35,
+  minZoom: 1.25,
+  maxZoom: 3.60,
+  ndcX: 0.35,
+  ndcY: -0.05
+};
+
+function getShowcaseViewportMetrics() {
+  const w = Math.max(320, window.innerWidth || 1280);
+  const h = Math.max(240, window.innerHeight || 720);
+  const headerEl = typeof document !== 'undefined' ? document.getElementById('lobby-header') : null;
+  const panelEl = typeof document !== 'undefined' ? document.querySelector('.loadout-panel') : null;
+  const headerRect = headerEl ? headerEl.getBoundingClientRect() : null;
+  const panelRect = panelEl ? panelEl.getBoundingClientRect() : null;
+
+  const headerBottom = (headerRect && headerRect.height > 0) ? headerRect.bottom : (w <= 768 ? 54 : 64);
+  let panelRight = 0;
+  if (w > 768) {
+    panelRight = (panelRect && panelRect.width > 0) ? panelRect.right : (w <= 1024 ? 404 : 504);
+  }
+
+  const padX = Math.max(24, Math.min(54, w * 0.03));
+  const padTop = w <= 768 ? 40 : (w <= 1024 ? 86 : 74);
+  const padBottom = w <= 768 ? 48 : (w <= 1024 ? 124 : 112);
+
+  const left = Math.min(w - 160, panelRight + padX);
+  const right = Math.max(left + 120, w - padX);
+  const top = headerBottom + padTop;
+  const bottom = Math.max(top + 120, h - padBottom);
+
+  const stageCenterX = (left + right) * 0.5;
+  const stageCenterY = (top + bottom) * 0.5;
+  const freeW = right - left;
+  const freeH = bottom - top;
+
+  return {
+    w,
+    h,
+    aspect: w / h,
+    freeW,
+    freeH,
+    freeWFrac: freeW / w,
+    freeHFrac: freeH / h,
+    ndcX: (stageCenterX / w) * 2 - 1,
+    ndcY: 1 - (stageCenterY / h) * 2
+  };
+}
+
+export function recomputeShowcaseFraming(resetZoom = false) {
+  const m = getShowcaseViewportMetrics();
+  const tanHalf = Math.tan(THREE.MathUtils.degToRad(lobbyCamera.fov * 0.5));
+  const cosYaw = Math.cos(DEFAULT_SHOWCASE_YAW);
+  const sinYaw = Math.sin(Math.abs(DEFAULT_SHOWCASE_YAW));
+  const spanX = Math.max(
+    showcaseState.halfW * cosYaw + showcaseState.halfD * sinYaw,
+    showcaseState.halfW * 0.92,
+    showcaseState.halfD
+  );
+  const spanY = Math.max(showcaseState.halfH, 0.22);
+  const nearDepth = showcaseState.halfW * sinYaw + showcaseState.halfD * cosYaw;
+
+  const dX = nearDepth + spanX / (0.68 * tanHalf * m.aspect * m.freeWFrac);
+  const dY = nearDepth + spanY / (0.60 * tanHalf * m.freeHFrac);
+  const baseDist = Math.max(1.75, dX, dY);
+
+  const prevBase = showcaseState.baseZoom || baseDist;
+  const ratio = prevBase > 0 ? baseDist / prevBase : 1;
+
+  showcaseState.baseZoom = baseDist;
+  showcaseState.minZoom = Math.max(0.95, baseDist * 0.55);
+  showcaseState.maxZoom = baseDist * 1.55;
+  showcaseState.ndcX = m.ndcX;
+  showcaseState.ndcY = m.ndcY;
+
+  if (resetZoom) {
+    showcaseState.targetZoom = baseDist;
+  } else {
+    showcaseState.targetZoom = Math.max(showcaseState.minZoom, Math.min(showcaseState.maxZoom, showcaseState.targetZoom * ratio));
+    showcaseState.zoom = Math.max(showcaseState.minZoom, Math.min(showcaseState.maxZoom, showcaseState.zoom * ratio));
+  }
+}
+
+function updateShowcaseLights(meta = {}) {
+  const status = meta.status || 'UNLOCKED';
+  const impl = meta.implementation || 'IMPLEMENTED';
+  if (impl === 'PLANNED') {
+    studioKey.intensity = 2.75;
+    studioRim.color.setHex(0x0ea5e9);
+    studioRim.intensity = 10.0;
+  } else if (status === 'LOCKED') {
+    studioKey.intensity = 2.65;
+    studioRim.color.setHex(0xef4444);
+    studioRim.intensity = 9.0;
+  } else {
+    studioKey.intensity = 3.35;
+    studioRim.color.setHex(0x38bdf8);
+    studioRim.intensity = 9.5;
+  }
+}
+
+export function setShowcaseWeapon(weaponId, options = {}) {
+  const id = weaponId || 'mk7';
+  const status = options.status || 'UNLOCKED';
+  const impl = options.implementation || 'IMPLEMENTED';
+  if (
+    showcaseHolder.children.length > 0 &&
+    showcaseState.weaponId === id &&
+    showcaseState.status === status &&
+    showcaseState.implementation === impl
+  ) {
+    updateShowcaseLights(options);
+    return;
+  }
+
+  while (showcaseHolder.children.length > 0) {
+    const child = showcaseHolder.children[0];
+    showcaseHolder.remove(child);
+    disposeHierarchyGeometries(child);
+  }
+
+  showcaseState.weaponId = id;
+  showcaseState.status = status;
+  showcaseState.implementation = impl;
+
+  const mesh = buildShowcaseWeaponMesh(id, options);
+  mesh.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(mesh);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+  const targetSpan = SHOWCASE_SPANS[id] || 1.42;
+  const scale = targetSpan / maxDim;
+
+  mesh.scale.setScalar(scale);
+  mesh.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+  showcaseHolder.add(mesh);
+  showcaseHolder.updateMatrixWorld(true);
+
+  showcaseState.scale = scale;
+  showcaseState.halfW = (size.x * scale) * 0.5;
+  showcaseState.halfH = (size.y * scale) * 0.5;
+  showcaseState.halfD = (size.z * scale) * 0.5;
+
+  updateShowcaseLights(options);
+  recomputeShowcaseFraming(true);
+}
+
+export function rotateShowcase(deltaYaw, deltaPitch) {
+  showcaseState.targetYaw += deltaYaw;
+  showcaseState.targetPitch = Math.max(-0.55, Math.min(0.55, showcaseState.targetPitch + deltaPitch));
+}
+
+export function zoomShowcase(delta) {
+  showcaseState.targetZoom = Math.max(
+    showcaseState.minZoom,
+    Math.min(showcaseState.maxZoom, showcaseState.targetZoom + delta)
+  );
+}
+
+export function resetShowcaseView() {
+  showcaseState.targetYaw = DEFAULT_SHOWCASE_YAW;
+  showcaseState.targetPitch = DEFAULT_SHOWCASE_PITCH;
+  recomputeShowcaseFraming(true);
+}
+
+export function getShowcaseState() {
+  const camOrigin = lobbyCamera.position;
+  return {
+    weaponId: showcaseState.weaponId,
+    status: showcaseState.status,
+    implementation: showcaseState.implementation,
+    operatorVisible: operator.visible,
+    showcaseVisible: showcaseRoot.visible,
+    lightsVisible: showcaseLights.visible,
+    yaw: showcaseState.yaw,
+    pitch: showcaseState.pitch,
+    targetYaw: showcaseState.targetYaw,
+    targetPitch: showcaseState.targetPitch,
+    zoom: showcaseState.zoom,
+    targetZoom: showcaseState.targetZoom,
+    baseZoom: showcaseState.baseZoom,
+    minZoom: showcaseState.minZoom,
+    maxZoom: showcaseState.maxZoom,
+    scale: showcaseState.scale,
+    halfW: showcaseState.halfW,
+    halfH: showcaseState.halfH,
+    cameraPos: [camOrigin.x, camOrigin.y, camOrigin.z]
+  };
+}
+
+function isHierarchyVisible(obj) {
+  let cur = obj;
+  while (cur) {
+    if (!cur.visible) return false;
+    cur = cur.parent;
+  }
+  return true;
+}
+
+function projectObjectScreenBounds(root) {
+  root.updateMatrixWorld(true);
+  lobbyCamera.updateMatrixWorld(true);
+  lobbyCamera.updateProjectionMatrix();
+  const w = window.innerWidth || 1280;
+  const h = window.innerHeight || 720;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  let hasMesh = false;
+  const p = new THREE.Vector3();
+  root.traverse((obj) => {
+    if (!obj.isMesh || !obj.geometry || !isHierarchyVisible(obj)) return;
+    if (!obj.geometry.boundingBox) obj.geometry.computeBoundingBox();
+    const b = obj.geometry.boundingBox;
+    if (!b || b.isEmpty()) return;
+    hasMesh = true;
+    for (let ix = 0; ix < 2; ix++) {
+      const bx = ix === 0 ? b.min.x : b.max.x;
+      for (let iy = 0; iy < 2; iy++) {
+        const by = iy === 0 ? b.min.y : b.max.y;
+        for (let iz = 0; iz < 2; iz++) {
+          const bz = iz === 0 ? b.min.z : b.max.z;
+          p.set(bx, by, bz).applyMatrix4(obj.matrixWorld).project(lobbyCamera);
+          const sx = (p.x * 0.5 + 0.5) * w;
+          const sy = (-p.y * 0.5 + 0.5) * h;
+          if (sx < minX) minX = sx;
+          if (sx > maxX) maxX = sx;
+          if (sy < minY) minY = sy;
+          if (sy > maxY) maxY = sy;
+        }
+      }
+    }
+  });
+  if (!hasMesh) return null;
+  return { minX, maxX, minY, maxY, width: maxX - minX, height: maxY - minY, cx: (minX + maxX) * 0.5, cy: (minY + maxY) * 0.5 };
+}
+
+export function getShowcaseScreenBounds() {
+  if (showcaseHolder.children.length === 0) return null;
+  return projectObjectScreenBounds(showcaseHolder);
+}
+
+export function getOperatorScreenBounds() {
+  return projectObjectScreenBounds(operator);
+}
+
 let idleTime = 0;
-const targetLook = new THREE.Vector3(0.68, 1.18, 0);
-const curLook = new THREE.Vector3(0.68, 1.18, 0);
-const targetCam = new THREE.Vector3(0.12, 1.38, 3.1);
+let currentLobbyView = 'play';
+const targetLook = new THREE.Vector3(0.68, 1.10, 0);
+const curLook = new THREE.Vector3(0.68, 1.10, 0);
+const targetCam = new THREE.Vector3(0.12, 1.28, 3.30);
+
+function applyShowcaseCameraTargets(distance) {
+  const tanHalf = Math.tan(THREE.MathUtils.degToRad(lobbyCamera.fov * 0.5));
+  const aspect = lobbyCamera.aspect || (window.innerWidth / Math.max(1, window.innerHeight));
+  const offRight = -showcaseState.ndcX * distance * tanHalf * aspect;
+  const offUp = -showcaseState.ndcY * distance * tanHalf;
+  targetLook.copy(SHOWCASE_ORIGIN)
+    .addScaledVector(SHOWCASE_RIGHT, offRight)
+    .addScaledVector(SHOWCASE_CAM_UP, offUp);
+  targetCam.copy(targetLook).addScaledVector(SHOWCASE_VIEW_DIR, -distance);
+}
 
 export function setLobbyView(view) {
-  if (view === 'operator') {
-    targetCam.set(0.72, 1.45, 2.2);
-    targetLook.set(1.15, 1.32, 0);
-  } else if (view === 'loadout') {
-    targetCam.set(0.62, 1.25, 2.0);
-    targetLook.set(1.1, 1.1, 0);
+  currentLobbyView = view || 'play';
+  const isLoadout = currentLobbyView === 'loadout';
+  operator.visible = !isLoadout;
+  showcaseRoot.visible = isLoadout;
+  showcaseLights.visible = isLoadout;
+
+  if (currentLobbyView === 'operator') {
+    targetCam.set(0.24, 1.20, 3.30);
+    targetLook.set(0.64, 1.08, -0.05);
+  } else if (isLoadout) {
+    recomputeShowcaseFraming(false);
+    applyShowcaseCameraTargets(showcaseState.targetZoom);
   } else {
-    targetCam.set(0.12, 1.38, 3.1);
-    targetLook.set(0.68, 1.18, 0);
+    targetCam.set(0.12, 1.28, 3.30);
+    targetLook.set(0.68, 1.10, 0);
   }
 }
 
@@ -400,6 +739,23 @@ export function setOperatorCamo(scheme) {
 export function updateLobby(dt) {
   idleTime += dt;
 
+  if (currentLobbyView === 'loadout') {
+    const rotAlpha = Math.min(1, dt * 12);
+    showcaseState.yaw += (showcaseState.targetYaw - showcaseState.yaw) * rotAlpha;
+    showcaseState.pitch += (showcaseState.targetPitch - showcaseState.pitch) * rotAlpha;
+    showcaseState.zoom += (showcaseState.targetZoom - showcaseState.zoom) * Math.min(1, dt * 10);
+
+    showcasePivot.rotation.set(showcaseState.pitch, showcaseState.yaw, 0);
+    showcaseHolder.position.y = Math.sin(idleTime * 1.4) * 0.008;
+
+    applyShowcaseCameraTargets(showcaseState.zoom);
+    const camAlpha = Math.min(1, dt * 8);
+    lobbyCamera.position.lerp(targetCam, camAlpha);
+    curLook.lerp(targetLook, camAlpha);
+    lobbyCamera.lookAt(curLook);
+    return;
+  }
+
   chestGroup.position.y = 0.24 + Math.sin(idleTime * 1.8) * 0.007;
   chestGroup.rotation.x = Math.sin(idleTime * 1.8) * 0.006;
   headGroup.rotation.y = Math.sin(idleTime * 0.5) * 0.04;
@@ -409,10 +765,10 @@ export function updateLobby(dt) {
   const swayX = Math.sin(idleTime * 0.35) * 0.035;
   const swayY = Math.cos(idleTime * 0.45) * 0.02;
 
-  lobbyCamera.position.x += (targetCam.x + swayX - lobbyCamera.position.x) * Math.min(1, dt * 4);
-  lobbyCamera.position.y += (targetCam.y + swayY - lobbyCamera.position.y) * Math.min(1, dt * 4);
-  lobbyCamera.position.z += (targetCam.z - lobbyCamera.position.z) * Math.min(1, dt * 4);
+  lobbyCamera.position.x += (targetCam.x + swayX - lobbyCamera.position.x) * Math.min(1, dt * 6);
+  lobbyCamera.position.y += (targetCam.y + swayY - lobbyCamera.position.y) * Math.min(1, dt * 6);
+  lobbyCamera.position.z += (targetCam.z - lobbyCamera.position.z) * Math.min(1, dt * 6);
 
-  curLook.lerp(targetLook, Math.min(1, dt * 4));
+  curLook.lerp(targetLook, Math.min(1, dt * 6));
   lobbyCamera.lookAt(curLook);
 }

@@ -132,6 +132,12 @@ try {
   });
 
   await step('4_memory_10_cycles_waves', async () => {
+    await b.evaluate(`window.__bp.startGame('waves')`);
+    await b.evaluate(`new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`);
+    await b.evaluate(`window.__bp.backToMenu()`);
+    await b.evaluate(`new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`);
+    const baseline = await b.evaluate(`window.__bp.snapshot()`);
+
     const geoSamples = [];
     for (let c = 0; c < 10; c++) {
       await b.evaluate(`window.__bp.startGame('waves')`);
@@ -144,10 +150,11 @@ try {
 
     const first = geoSamples[0];
     const last = geoSamples[geoSamples.length - 1];
-    if (Math.abs(last - first) > 1) {
-      throw new Error(`Geometries grew across 10 waves cycles: ${first} -> ${last} (${geoSamples.join(',')})`);
+    const peak = Math.max(...geoSamples);
+    if (Math.abs(last - first) > 1 || peak - baseline.geometries > 1) {
+      throw new Error(`Geometries grew across 10 waves cycles: baseline=${baseline.geometries} ${first} -> ${last} (${geoSamples.join(',')})`);
     }
-    return { first, last, geoSamples };
+    return { warmupBaselineGeo: baseline.geometries, first, last, peak, geoSamples };
   });
 
   await step('5_memory_10_cycles_snd', async () => {

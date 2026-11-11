@@ -24,6 +24,10 @@ const metal = new THREE.MeshStandardMaterial({ color: 0x3e4249, roughness: 0.4, 
 const matG = new THREE.MeshStandardMaterial({ color: 0x202328, roughness: 0.5, metalness: 0.75 });
 const matM = new THREE.MeshStandardMaterial({ color: 0x424750, roughness: 0.45, metalness: 0.65 });
 const matV = new THREE.MeshStandardMaterial({ color: 0x252a32, roughness: 0.8, metalness: 0.2 });
+const metalBright = new THREE.MeshStandardMaterial({ color: 0x67707d, roughness: 0.32, metalness: 0.88 });
+const protoBody = new THREE.MeshStandardMaterial({ color: 0x1e3a52, roughness: 0.35, metalness: 0.45, emissive: 0x0d3b5c, emissiveIntensity: 0.55, transparent: true, opacity: 0.86 });
+const protoAccent = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.28, metalness: 0.55, emissive: 0x0ea5e9, emissiveIntensity: 0.75 });
+const protoWire = new THREE.MeshBasicMaterial({ color: 0x7dd3fc, wireframe: true, transparent: true, opacity: 0.28 });
 
 function buildMk7Mesh() {
   const g = new THREE.Group();
@@ -396,9 +400,7 @@ export function setWeapon(id, options = {}) {
     while (weaponMeshSubGroup.children.length > 0) {
       const child = weaponMeshSubGroup.children[0];
       weaponMeshSubGroup.remove(child);
-      child.traverse(o => {
-        if (o.isMesh && o.geometry) o.geometry.dispose();
-      });
+      disposeHierarchyGeometries(child);
     }
     const mesh = def.buildMesh();
     weaponMeshSubGroup.add(mesh);
@@ -501,6 +503,134 @@ export function buildLobbyWeaponMesh(id) {
     grp.add(stock);
   }
   return grp;
+}
+
+const PROTO_SPECS = {
+  ak12: [
+    ['box', [0.072, 0.105, 0.44], [0, 0, -0.05]],
+    ['box', [0.062, 0.032, 0.36], [0, 0.065, -0.03]],
+    ['box', [0.026, 0.014, 0.32], [0, 0.086, -0.04], null, true],
+    ['box', [0.066, 0.092, 0.27], [0, 0, -0.39]],
+    ['cyl', [0.016, 0.016, 0.26, 10], [0, 0.054, -0.39], [Math.PI / 2, 0, 0]],
+    ['cyl', [0.018, 0.02, 0.46, 12], [0, 0.014, -0.62], [Math.PI / 2, 0, 0]],
+    ['box', [0.024, 0.068, 0.034], [0, 0.048, -0.64], null, true],
+    ['cyl', [0.028, 0.026, 0.085, 10], [0, 0.014, -0.87], [Math.PI / 2, 0, 0], true],
+    ['box', [0.048, 0.16, 0.092], [0, -0.11, -0.17], [0.22, 0, 0]],
+    ['box', [0.046, 0.15, 0.086], [0, -0.23, -0.12], [0.54, 0, 0], true],
+    ['box', [0.046, 0.145, 0.065], [0, -0.11, 0.11], [-0.28, 0, 0]],
+    ['box', [0.036, 0.026, 0.26], [0, 0.03, 0.30]],
+    ['box', [0.034, 0.022, 0.25], [0, -0.025, 0.30], [0.16, 0, 0]],
+    ['box', [0.046, 0.115, 0.04], [0, -0.01, 0.44], null, true]
+  ],
+  mp5k: [
+    ['cyl', [0.034, 0.034, 0.32, 12], [0, 0.025, -0.06], [Math.PI / 2, 0, 0]],
+    ['box', [0.058, 0.072, 0.26], [0, -0.022, -0.02]],
+    ['cyl', [0.018, 0.018, 0.16, 10], [0, 0.062, -0.16], [Math.PI / 2, 0, 0]],
+    ['cyl', [0.018, 0.02, 0.12, 10], [0, 0.024, -0.26], [Math.PI / 2, 0, 0], true],
+    ['cyl', [0.02, 0.02, 0.03, 10], [0, 0.078, -0.21], [Math.PI / 2, 0, 0], true],
+    ['cyl', [0.02, 0.02, 0.034, 10], [0, 0.076, 0.05], [Math.PI / 2, 0, 0], true],
+    ['box', [0.042, 0.115, 0.052], [0, -0.078, -0.20], [0.12, 0, 0], true],
+    ['box', [0.04, 0.145, 0.068], [0, -0.10, -0.11], [-0.14, 0, 0]],
+    ['box', [0.038, 0.125, 0.064], [0, -0.21, -0.08], [-0.36, 0, 0], true],
+    ['box', [0.045, 0.135, 0.062], [0, -0.105, 0.07], [-0.26, 0, 0]],
+    ['box', [0.056, 0.095, 0.045], [0, 0.005, 0.13]],
+    ['box', [0.03, 0.032, 0.08], [0, 0.02, 0.18], null, true]
+  ],
+  mk48: [
+    ['box', [0.098, 0.135, 0.44], [0, 0.005, -0.02]],
+    ['box', [0.088, 0.042, 0.34], [0, 0.088, -0.02]],
+    ['box', [0.036, 0.018, 0.28], [0, 0.116, -0.02], null, true],
+    ['box', [0.092, 0.102, 0.32], [0, 0.008, -0.38]],
+    ['cyl', [0.022, 0.025, 0.44, 12], [0, 0.02, -0.66], [Math.PI / 2, 0, 0]],
+    ['cyl', [0.032, 0.024, 0.09, 10], [0, 0.02, -0.90], [Math.PI / 2, 0, 0], true],
+    ['box', [0.145, 0.165, 0.165], [0.015, -0.13, -0.09]],
+    ['box', [0.045, 0.055, 0.12], [0.072, -0.015, -0.09], [0, 0, -0.35], true],
+    ['cyl', [0.012, 0.012, 0.24, 8], [-0.052, -0.045, -0.44], [Math.PI / 2, 0, 0], true],
+    ['cyl', [0.012, 0.012, 0.24, 8], [0.052, -0.045, -0.44], [Math.PI / 2, 0, 0], true],
+    ['box', [0.024, 0.052, 0.14], [0.04, 0.095, -0.32], [0, 0, -0.35]],
+    ['box', [0.02, 0.055, 0.024], [0, 0.068, -0.74], null, true],
+    ['box', [0.05, 0.15, 0.072], [0, -0.115, 0.13], [-0.28, 0, 0]],
+    ['box', [0.07, 0.135, 0.27], [0, -0.015, 0.34]]
+  ],
+  awm338: [
+    ['box', [0.064, 0.098, 0.56], [0, 0, -0.02]],
+    ['cyl', [0.019, 0.023, 0.70, 12], [0, 0.024, -0.60], [Math.PI / 2, 0, 0]],
+    ['box', [0.064, 0.044, 0.115], [0, 0.024, -0.97], null, true],
+    ['box', [0.042, 0.055, 0.032], [0, 0.072, -0.12]],
+    ['box', [0.042, 0.055, 0.032], [0, 0.072, 0.04]],
+    ['cyl', [0.022, 0.022, 0.32, 12], [0, 0.106, -0.04], [Math.PI / 2, 0, 0], true],
+    ['cyl', [0.036, 0.024, 0.12, 12], [0, 0.106, -0.22], [Math.PI / 2, 0, 0], true],
+    ['cyl', [0.024, 0.030, 0.09, 12], [0, 0.106, 0.14], [Math.PI / 2, 0, 0]],
+    ['box', [0.046, 0.095, 0.115], [0, -0.088, -0.09]],
+    ['cyl', [0.012, 0.012, 0.065, 8], [0.045, 0.02, 0.05], [0, 0, Math.PI / 2], true],
+    ['box', [0.058, 0.052, 0.30], [0, 0.02, 0.38]],
+    ['box', [0.048, 0.036, 0.27], [0, -0.068, 0.36], [-0.14, 0, 0]],
+    ['box', [0.046, 0.12, 0.065], [0, -0.055, 0.22], [-0.32, 0, 0]],
+    ['box', [0.054, 0.028, 0.14], [0, 0.06, 0.41], null, true],
+    ['box', [0.06, 0.135, 0.036], [0, -0.015, 0.53], null, true],
+    ['cyl', [0.011, 0.011, 0.22, 8], [-0.07, -0.09, -0.46], [0.22, 0, -0.35], true],
+    ['cyl', [0.011, 0.011, 0.22, 8], [0.07, -0.09, -0.46], [0.22, 0, 0.35], true]
+  ],
+  knife: [
+    ['box', [0.011, 0.044, 0.20], [0, 0.008, -0.09]],
+    ['box', [0.009, 0.032, 0.075], [0, 0.002, -0.21], [0.24, 0, 0]],
+    ['box', [0.013, 0.01, 0.17], [0, -0.015, -0.09], null, true],
+    ['box', [0.026, 0.088, 0.022], [0, 0.004, 0.02], null, true],
+    ['box', [0.028, 0.04, 0.135], [0, 0.002, 0.10]],
+    ['cyl', [0.018, 0.022, 0.03, 10], [0, 0.002, 0.18], [Math.PI / 2, 0, 0], true]
+  ]
+};
+
+function buildProtoFromSpec(parts) {
+  const grp = new THREE.Group();
+  for (const [kind, dims, pos, rot = null, accent = false] of parts) {
+    const geo = kind === 'cyl'
+      ? new THREE.CylinderGeometry(...dims)
+      : new THREE.BoxGeometry(...dims);
+    const mesh = new THREE.Mesh(geo, accent ? protoAccent : protoBody);
+    mesh.position.set(pos[0], pos[1], pos[2]);
+    if (rot) mesh.rotation.set(rot[0], rot[1], rot[2]);
+    grp.add(mesh);
+    const wire = new THREE.Mesh(geo, protoWire);
+    wire.position.copy(mesh.position);
+    wire.rotation.copy(mesh.rotation);
+    grp.add(wire);
+  }
+  return grp;
+}
+
+export function disposeHierarchyGeometries(root) {
+  if (!root) return;
+  const geometries = new Set();
+  root.traverse(o => {
+    if (o.isMesh && o.geometry) geometries.add(o.geometry);
+  });
+  for (const g of geometries) g.dispose();
+}
+
+export function buildShowcaseWeaponMesh(id, options = {}) {
+  const wrapper = new THREE.Group();
+  let model;
+  if (WEAPONS[id]) {
+    model = WEAPONS[id].buildMesh();
+  } else if (PROTO_SPECS[id]) {
+    model = buildProtoFromSpec(PROTO_SPECS[id]);
+  } else {
+    model = buildProtoFromSpec(PROTO_SPECS.ak12);
+  }
+  model.rotation.y = -Math.PI / 2;
+  if (options.implementation === 'PLANNED' && !WEAPONS[id] && !PROTO_SPECS[id]) {
+    model.traverse(o => {
+      if (o.isMesh) o.material = protoBody;
+    });
+  }
+  if (WEAPONS[id]) {
+    model.traverse(o => {
+      if (o.isMesh && o.material === metal) o.material = metalBright;
+    });
+  }
+  wrapper.add(model);
+  return wrapper;
 }
 
 setWeapon('mk7');

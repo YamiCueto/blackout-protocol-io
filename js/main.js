@@ -7,7 +7,23 @@ import { spawnTracer, spawnBurst, spawnDecal, updateEffects, resetEffects } from
 import { weapon, gunGroup, muzzleFlash, flashSprite, GUN_HIP, GUN_ADS, setWeapon, WEAPONS, getDamageWithDropoff } from './weapon.js';
 import { enemies, makeEnemy, damageEnemy, enemyLOS, clearEnemies, updateCorpses } from './enemies.js';
 import { createDiagnostics } from './diagnostics.js';
-import { lobbyScene, lobbyCamera, updateLobby, setLobbyView, setOperatorCamo, setLobbyWeapon, getLobbyWeaponId } from './lobby.js';
+import {
+  lobbyScene,
+  lobbyCamera,
+  updateLobby,
+  setLobbyView,
+  setOperatorCamo,
+  setLobbyWeapon,
+  getLobbyWeaponId,
+  setShowcaseWeapon,
+  rotateShowcase,
+  zoomShowcase,
+  resetShowcaseView,
+  getShowcaseState,
+  getShowcaseScreenBounds,
+  getOperatorScreenBounds,
+  recomputeShowcaseFraming
+} from './lobby.js';
 import { progression, WEAPON_CATEGORIES, isWeaponUnlocked } from './progression.js';
 
 /* ---------------- Ajustes: aplicación y UI ---------------- */
@@ -90,6 +106,20 @@ function renderLoadoutsBar() {
     btn.textContent = isDeploy ? `${l.name} ★` : l.name;
     btn.onclick = () => {
       editingLoadoutId = l.id;
+      const picked = progression.getLoadouts().find(x => x.id === l.id);
+      if (picked) {
+        if (editingSlot === 'secondary' && picked.secondary) {
+          activeInspectedWeaponId = picked.secondary;
+        } else if (editingSlot === 'primary' && picked.primary) {
+          activeInspectedWeaponId = picked.primary;
+          const pCat = progression.getCatalogWithStatus().find(x => x.id === picked.primary)?.category;
+          if (pCat) activeArmoryCat = pCat;
+        }
+      }
+      document.querySelectorAll('.armory-cat-btn').forEach(c => {
+        c.classList.toggle('active', c.dataset.cat === activeArmoryCat);
+      });
+      ensureActiveCategoryVisible(true);
       renderLoadoutsBar();
       renderArmoryWeapons();
     };
@@ -104,6 +134,7 @@ function renderLoadoutsBar() {
       if (val.length > 0) {
         progression.renameLoadout(editingLoadoutId, val);
         renderLoadoutsBar();
+        renderInspectedWeapon();
       }
     };
   }
@@ -149,11 +180,17 @@ function renderLoadoutsBar() {
     btnPrim.onclick = () => {
       editingSlot = 'primary';
       activeArmoryCat = 'ASSAULT';
+      if (currentEditing && currentEditing.primary) {
+        activeInspectedWeaponId = currentEditing.primary;
+        const pCat = progression.getCatalogWithStatus().find(x => x.id === currentEditing.primary)?.category;
+        if (pCat) activeArmoryCat = pCat;
+      }
       btnPrim.classList.add('active');
       if (btnSec) btnSec.classList.remove('active');
       document.querySelectorAll('.armory-cat-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.cat === activeArmoryCat);
       });
+      ensureActiveCategoryVisible(true);
       renderArmoryWeapons();
     };
   }
@@ -163,18 +200,92 @@ function renderLoadoutsBar() {
     btnSec.onclick = () => {
       editingSlot = 'secondary';
       activeArmoryCat = 'PISTOL';
+      if (currentEditing && currentEditing.secondary) {
+        activeInspectedWeaponId = currentEditing.secondary;
+      }
       btnSec.classList.add('active');
       if (btnPrim) btnPrim.classList.remove('active');
       document.querySelectorAll('.armory-cat-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.cat === activeArmoryCat);
       });
+      ensureActiveCategoryVisible(true);
       renderArmoryWeapons();
     };
   }
 }
 
+let catScrollTarget = null;
+let catScrollTimer = null;
+
+function updateCategoryArrows() {
+  const catNav = $('armory-cat-nav');
+  const prevBtn = $('armory-cat-prev');
+  const nextBtn = $('armory-cat-next');
+  if (!catNav || !prevBtn || !nextBtn) return;
+  const maxScroll = Math.max(0, catNav.scrollWidth - catNav.clientWidth);
+  if (maxScroll <= 2) {
+    prevBtn.disabled = true;
+    nextBtn.disabled = true;
+    return;
+  }
+  prevBtn.disabled = catNav.scrollLeft <= 2;
+  nextBtn.disabled = catNav.scrollLeft >= maxScroll - 2;
+}
+
+function scrollCategoryNavBy(dir) {
+  const catNav = $('armory-cat-nav');
+  if (!catNav) return;
+  const maxScroll = Math.max(0, catNav.scrollWidth - catNav.clientWidth);
+  const step = Math.max(120, Math.round(catNav.clientWidth * 0.65));
+  const base = catScrollTarget !== null ? catScrollTarget : catNav.scrollLeft;
+  catScrollTarget = Math.max(0, Math.min(maxScroll, base + dir * step));
+  catNav.scrollTo({ left: catScrollTarget, behavior: 'smooth' });
+  clearTimeout(catScrollTimer);
+  catScrollTimer = setTimeout(() => {
+    catScrollTarget = null;
+    updateCategoryArrows();
+  }, 700);
+  updateCategoryArrows();
+}
+
+function ensureActiveCategoryVisible(smooth = true) {
+  const catNav = $('armory-cat-nav');
+  if (!catNav) return;
+  const activeBtn = catNav.querySelector('.armory-cat-btn.active');
+  if (!activeBtn) {
+    updateCategoryArrows();
+    return;
+  }
+  const navRect = catNav.getBoundingClientRect();
+  const btnRect = activeBtn.getBoundingClientRect();
+  if (navRect.width <= 0 || btnRect.width <= 0) {
+    updateCategoryArrows();
+    return;
+  }
+  const pad = 10;
+  let targetLeft = catNav.scrollLeft;
+  if (btnRect.left < navRect.left + pad) {
+    targetLeft -= (navRect.left + pad - btnRect.left);
+  } else if (btnRect.right > navRect.right - pad) {
+    targetLeft += (btnRect.right - (navRect.right - pad));
+  } else {
+    updateCategoryArrows();
+    return;
+  }
+  const maxScroll = Math.max(0, catNav.scrollWidth - catNav.clientWidth);
+  targetLeft = Math.max(0, Math.min(maxScroll, targetLeft));
+  if (Math.abs(targetLeft - catNav.scrollLeft) > 1) {
+    catScrollTarget = null;
+    catNav.scrollTo({ left: targetLeft, behavior: smooth ? 'smooth' : 'auto' });
+  }
+  updateCategoryArrows();
+}
+
 function initArmoryUI() {
   const catNav = $('armory-cat-nav');
+  const catBar = $('armory-cat-bar');
+  const prevBtn = $('armory-cat-prev');
+  const nextBtn = $('armory-cat-next');
   if (!catNav) return;
   catNav.innerHTML = '';
   WEAPON_CATEGORIES.forEach(cat => {
@@ -192,12 +303,43 @@ function initArmoryUI() {
       document.querySelectorAll('.armory-cat-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.cat === activeArmoryCat);
       });
+      ensureActiveCategoryVisible(true);
       renderArmoryWeapons();
     };
     catNav.appendChild(btn);
   });
+
+  if (prevBtn) prevBtn.onclick = () => scrollCategoryNavBy(-1);
+  if (nextBtn) nextBtn.onclick = () => scrollCategoryNavBy(1);
+
+  catNav.addEventListener('scroll', updateCategoryArrows, { passive: true });
+  catNav.addEventListener('scrollend', () => {
+    catScrollTarget = null;
+    updateCategoryArrows();
+  }, { passive: true });
+
+  if (catBar) {
+    catBar.addEventListener('wheel', e => {
+      if (phase !== 'MENU' || currentTab !== 'loadout') return;
+      const rawDelta = Math.abs(e.deltaX) >= Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (rawDelta === 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      catScrollTarget = null;
+      catNav.scrollLeft += rawDelta;
+      updateCategoryArrows();
+    }, { passive: false });
+  }
+
+  addEventListener('resize', () => {
+    if (phase === 'MENU' && currentTab === 'loadout') {
+      ensureActiveCategoryVisible(false);
+    }
+  });
+
   renderLoadoutsBar();
   renderArmoryWeapons();
+  updateCategoryArrows();
 }
 
 function renderArmoryWeapons() {
@@ -220,7 +362,7 @@ function renderArmoryWeapons() {
       ? (curLoadout.secondary === w.id)
       : (curLoadout.primary === w.id);
     let statusClass = 'status-planned';
-    let statusLabel = 'PRÓXIMO';
+    let statusLabel = 'PROTOTIPO';
     if (isEquippedInSlot) {
       statusClass = 'status-equipped';
       statusLabel = 'EQUIPADA';
@@ -251,6 +393,88 @@ function renderArmoryWeapons() {
   renderInspectedWeapon();
 }
 
+const WEAPON_CALIBERS = {
+  mk7: '5.56 NATO',
+  ak12: '5.45×39mm',
+  vector9: '9×19mm NATO',
+  mp5k: '9×19mm',
+  m870: '12 GAUGE',
+  mk48: '7.62×51mm NATO',
+  awm338: '.338 LAPUA',
+  p12: '.45 ACP',
+  knife: 'ACERO TEMPLADO'
+};
+
+function formatWeaponBadgeName(id) {
+  if (!id) return 'VACÍA';
+  return WEAPONS[id] ? WEAPONS[id].name.replace(/\s+(CARBINE|BREACHER|TACTICAL)$/i, '') : id.toUpperCase();
+}
+
+function updateShowcaseContextHUD(w, caliber, curLoadout, isEquippedInSlot) {
+  const activeDeploy = progression.getActiveLoadout();
+  const cat = WEAPON_CATEGORIES.find(c => c.id === w.category);
+  const titleEl = $('showcase-title');
+  const subEl = $('showcase-sub');
+  const statePill = $('showcase-state-pill');
+  const noteEl = $('showcase-note');
+  const editNameEl = $('ctx-editing-name');
+  const editWpnsEl = $('ctx-editing-weapons');
+  const depNameEl = $('ctx-deploy-name');
+  const depWpnsEl = $('ctx-deploy-weapons');
+  const diffEl = $('showcase-diff-hint');
+
+  if (titleEl) titleEl.textContent = w.name;
+  if (subEl) subEl.textContent = `${cat ? cat.name : w.category} • ${caliber}`;
+
+  if (statePill) {
+    if (w.implementation === 'PLANNED') {
+      statePill.textContent = 'PROTOTIPO // EN DESARROLLO';
+      statePill.className = 'showcase-pill pill-state state-planned';
+    } else if (isEquippedInSlot) {
+      statePill.textContent = `EQUIPADA EN ${curLoadout.name}`;
+      statePill.className = 'showcase-pill pill-state state-equipped';
+    } else if (w.status === 'LOCKED') {
+      statePill.textContent = `BLOQUEADA • NVL ${w.reqLevel}`;
+      statePill.className = 'showcase-pill pill-state state-locked';
+    } else {
+      statePill.textContent = 'DESBLOQUEADA';
+      statePill.className = 'showcase-pill pill-state state-unlocked';
+    }
+  }
+
+  if (noteEl) {
+    if (w.implementation === 'PLANNED') {
+      noteEl.textContent = 'CONCEPTO VISUAL NO JUGABLE — SOLO EXHIBICIÓN';
+      noteEl.className = 'showcase-note';
+    } else if (w.status === 'LOCKED') {
+      noteEl.textContent = `SE DESBLOQUEA AL NIVEL ${w.reqLevel} — SOLO INSPECCIÓN`;
+      noteEl.className = 'showcase-note warn';
+    } else if (!isEquippedInSlot) {
+      noteEl.textContent = 'MODO INSPECCIÓN — NO MODIFICA TU CLASE EQUIPADA';
+      noteEl.className = 'showcase-note';
+    } else {
+      noteEl.textContent = curLoadout.id === activeDeploy.id
+        ? 'EQUIPAMIENTO ACTIVO PARA DESPLIEGUE'
+        : `EQUIPADA EN ${curLoadout.name} (CLASE EDITADA)`;
+      noteEl.className = 'showcase-note';
+    }
+  }
+
+  if (editNameEl) editNameEl.textContent = curLoadout.name;
+  if (editWpnsEl) {
+    editWpnsEl.textContent = `[1] ${formatWeaponBadgeName(curLoadout.primary)} • [2] ${formatWeaponBadgeName(curLoadout.secondary)}`;
+  }
+  if (depNameEl) depNameEl.textContent = activeDeploy.name;
+  if (depWpnsEl) {
+    depWpnsEl.textContent = `[1] ${formatWeaponBadgeName(activeDeploy.primary)} • [2] ${formatWeaponBadgeName(activeDeploy.secondary)}`;
+  }
+  if (diffEl) {
+    diffEl.textContent = curLoadout.id !== activeDeploy.id
+      ? `Editando "${curLoadout.name}" — despliegue sigue en "${activeDeploy.name}"`
+      : `Editando la clase activa de despliegue (${activeDeploy.name})`;
+  }
+}
+
 function renderInspectedWeapon() {
   const catalog = progression.getCatalogWithStatus();
   const w = catalog.find(x => x.id === activeInspectedWeaponId) || catalog[0];
@@ -265,21 +489,20 @@ function renderInspectedWeapon() {
   const btnEquip = $('btn-equip-weapon');
   const statusTag = $('loadout-status-tag');
   const curLoadout = progression.getLoadouts().find(l => l.id === editingLoadoutId) || progression.getActiveLoadout();
+  const activeDeploy = progression.getActiveLoadout();
+  const caliber = WEAPON_CALIBERS[w.id] || 'CLASIFICADO';
 
   if (nameEl) nameEl.textContent = w.name;
   if (typeEl) {
     const cat = WEAPON_CATEGORIES.find(c => c.id === w.category);
-    let caliber = 'CLASIFICADO';
-    if (w.id === 'mk7') caliber = '5.56 NATO';
-    else if (w.id === 'vector9') caliber = '9x19mm NATO';
-    else if (w.id === 'm870') caliber = '12 GAUGE';
-    else if (w.id === 'p12') caliber = '.45 ACP';
     typeEl.textContent = (cat ? cat.name : w.category) + ' • ' + caliber;
   }
-  if (lvlEl) lvlEl.textContent = `NVL ${w.levelInfo.level}/${w.maxLevel}`;
+  if (lvlEl) lvlEl.textContent = w.implementation === 'PLANNED' ? 'PROTOTIPO' : `NVL ${w.levelInfo.level}/${w.maxLevel}`;
   if (xpFill) xpFill.style.width = Math.round(w.levelInfo.progress * 100) + '%';
   if (xpTxt) {
-    xpTxt.textContent = w.levelInfo.isMax ? 'MÁXIMO' : `${w.levelInfo.levelXP} / ${w.levelInfo.nextLevelXP} XP`;
+    xpTxt.textContent = w.implementation === 'PLANNED'
+      ? 'EN DESARROLLO'
+      : (w.levelInfo.isMax ? 'MÁXIMO' : `${w.levelInfo.levelXP} / ${w.levelInfo.nextLevelXP} XP`);
   }
   if (descEl) descEl.textContent = w.desc;
 
@@ -317,12 +540,14 @@ function renderInspectedWeapon() {
       btnEquip.textContent = 'EQUIPADA';
       btnEquip.className = 'btn-armory equipped';
       btnEquip.disabled = true;
-      statusTag.textContent = 'EN SERVICIO';
+      statusTag.textContent = curLoadout.id === activeDeploy.id
+        ? `EN ${curLoadout.name} (DESPLIEGUE ★)`
+        : `EQUIPADA EN ${curLoadout.name}`;
     } else if (w.status === 'UNLOCKED') {
       btnEquip.textContent = 'EQUIPAR';
       btnEquip.className = 'btn-armory';
       btnEquip.disabled = false;
-      statusTag.textContent = 'LISTA';
+      statusTag.textContent = `LISTA PARA ${curLoadout.name}`;
       btnEquip.onclick = () => {
         let ok = false;
         if (w.category === 'PISTOL' || w.category === 'MELEE') {
@@ -333,28 +558,30 @@ function renderInspectedWeapon() {
           ok = progression.setLoadoutPrimary(editingLoadoutId, w.id);
         }
         if (ok) {
-          const activeDeploy = progression.getActiveLoadout();
-          if (editingLoadoutId === activeDeploy.id && editingSlot === 'primary') {
+          const curActive = progression.getActiveLoadout();
+          if (editingLoadoutId === curActive.id && editingSlot === 'primary') {
             setWeapon(w.id);
             setLobbyWeapon(w.id);
           }
           renderLoadoutsBar();
           renderArmoryWeapons();
-          renderInspectedWeapon();
         }
       };
     } else if (w.status === 'LOCKED') {
       btnEquip.textContent = 'BLOQUEADA';
       btnEquip.className = 'btn-armory';
       btnEquip.disabled = true;
-      statusTag.textContent = `REQUIERE NVL ${w.reqLevel}`;
+      statusTag.textContent = `SOLO INSPECCIÓN • NVL ${w.reqLevel}`;
     } else {
       btnEquip.textContent = 'EN DESARROLLO';
       btnEquip.className = 'btn-armory';
       btnEquip.disabled = true;
-      statusTag.textContent = `DESBLOQUEO NVL ${w.reqLevel}`;
+      statusTag.textContent = `PROTOTIPO • OBJ. NVL ${w.reqLevel}`;
     }
   }
+
+  setShowcaseWeapon(w.id, { status: w.status, implementation: w.implementation });
+  updateShowcaseContextHUD(w, caliber, curLoadout, isEquippedInSlot);
 }
 
 let currentTab = 'play';
@@ -367,7 +594,9 @@ function switchTab(tab) {
     refreshSettingsUI();
     return;
   }
+  const prevTab = currentTab;
   currentTab = tab;
+  $('menu').classList.toggle('view-loadout', tab === 'loadout');
   document.querySelectorAll('.nav-tab').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === tab);
   });
@@ -380,10 +609,23 @@ function switchTab(tab) {
     view.style.display = 'block';
     view.classList.add('active');
   }
-  setLobbyView(tab);
   if (tab === 'loadout') {
+    renderLoadoutsBar();
     renderArmoryWeapons();
-    renderInspectedWeapon();
+    ensureActiveCategoryVisible(false);
+    requestAnimationFrame(() => ensureActiveCategoryVisible(false));
+    if (prevTab !== 'loadout') {
+      resetShowcaseView();
+    } else {
+      recomputeShowcaseFraming(false);
+    }
+    setLobbyView('loadout');
+  } else {
+    const activeDeploy = progression.getActiveLoadout();
+    if (activeDeploy && activeDeploy.primary) {
+      setLobbyWeapon(activeDeploy.primary);
+    }
+    setLobbyView(tab);
   }
 }
 
@@ -1228,8 +1470,6 @@ function backToMenu() {
   setLobbyWeapon(equippedId);
   updatePlayerHeaderUI();
   renderLoadoutsBar();
-  renderArmoryWeapons();
-  renderInspectedWeapon();
   $('menu').style.display = 'flex';
 }
 
@@ -1663,6 +1903,78 @@ const diagnostics = createDiagnostics(renderer, scene, () => {
   progression,
 });
 
+function initShowcaseControls() {
+  const stage = $('armory-showcase-stage');
+  const resetBtn = $('btn-showcase-reset');
+  if (!stage) return;
+
+  let dragging = false;
+  let activePointerId = null;
+  let lastX = 0;
+  let lastY = 0;
+
+  stage.addEventListener('pointerdown', e => {
+    if (phase !== 'MENU' || currentTab !== 'loadout') return;
+    if (e.button !== 0 || e.target.closest('#btn-showcase-reset')) return;
+    dragging = true;
+    activePointerId = e.pointerId;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    stage.classList.add('dragging');
+    if (stage.setPointerCapture) {
+      try { stage.setPointerCapture(e.pointerId); } catch {}
+    }
+    e.preventDefault();
+  });
+
+  stage.addEventListener('pointermove', e => {
+    if (!dragging || (activePointerId !== null && e.pointerId !== activePointerId)) return;
+    if (phase !== 'MENU' || currentTab !== 'loadout') return;
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    rotateShowcase(dx * 0.0085, dy * 0.0065);
+  });
+
+  const endDrag = e => {
+    if (!dragging) return;
+    dragging = false;
+    stage.classList.remove('dragging');
+    if (activePointerId !== null && stage.releasePointerCapture) {
+      try { stage.releasePointerCapture(activePointerId); } catch {}
+    }
+    activePointerId = null;
+  };
+
+  stage.addEventListener('pointerup', endDrag);
+  stage.addEventListener('pointercancel', endDrag);
+  addEventListener('blur', endDrag);
+
+  stage.addEventListener('wheel', e => {
+    if (phase !== 'MENU' || currentTab !== 'loadout') return;
+    e.preventDefault();
+    e.stopPropagation();
+    const step = Math.sign(e.deltaY) * Math.min(0.45, Math.max(0.12, Math.abs(e.deltaY) * 0.002));
+    zoomShowcase(step);
+  }, { passive: false });
+
+  stage.addEventListener('dblclick', e => {
+    if (phase !== 'MENU' || currentTab !== 'loadout') return;
+    if (!e.target.closest('#btn-showcase-reset')) {
+      resetShowcaseView();
+    }
+  });
+
+  if (resetBtn) {
+    resetBtn.addEventListener('pointerdown', e => e.stopPropagation());
+    resetBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      resetShowcaseView();
+    });
+  }
+}
+
 window.__bp = window.__bp || {};
 window.__bp.progression = progression;
 window.__bp.weapon = weapon;
@@ -1675,6 +1987,14 @@ window.__bp.switchWeaponSlot = switchWeaponSlot;
 window.__bp.syncSlotToActiveWeapon = syncSlotToActiveWeapon;
 window.__bp.getAdsState = () => ({ adsDown, adsAmount });
 window.__bp.getLobbyWeaponId = getLobbyWeaponId;
+window.__bp.setShowcaseWeapon = setShowcaseWeapon;
+window.__bp.rotateShowcase = rotateShowcase;
+window.__bp.zoomShowcase = zoomShowcase;
+window.__bp.resetShowcaseView = resetShowcaseView;
+window.__bp.getShowcaseState = getShowcaseState;
+window.__bp.getShowcaseScreenBounds = getShowcaseScreenBounds;
+window.__bp.getOperatorScreenBounds = getOperatorScreenBounds;
+window.__bp.getCurrentTab = () => currentTab;
 
 applySettings();
 refreshSettingsUI();
@@ -1683,6 +2003,7 @@ const initWeapon = activeDeploy?.primary || progression.getState().selectedWeapo
 setWeapon(initWeapon);
 setLobbyWeapon(initWeapon);
 initArmoryUI();
+initShowcaseControls();
 renderLoadoutsBar();
 updatePlayerHeaderUI();
 progression.subscribe(() => {
@@ -1696,7 +2017,6 @@ progression.subscribe(() => {
   if (currentTab === 'loadout') {
     renderLoadoutsBar();
     renderArmoryWeapons();
-    renderInspectedWeapon();
   }
 });
 $('loading').style.display = 'none';

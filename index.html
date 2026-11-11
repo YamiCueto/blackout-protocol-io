@@ -196,7 +196,11 @@
         </div>
       </div>
       
-      <div class="armory-cat-nav" id="armory-cat-nav"></div>
+      <div class="armory-cat-bar" id="armory-cat-bar">
+        <button type="button" class="armory-cat-arrow" id="armory-cat-prev" aria-label="Categor&iacute;as anteriores">&#9664;</button>
+        <div class="armory-cat-nav" id="armory-cat-nav"></div>
+        <button type="button" class="armory-cat-arrow" id="armory-cat-next" aria-label="Siguientes categor&iacute;as">&#9654;</button>
+      </div>
 
       <div class="armory-weapon-strip" id="armory-weapon-strip"></div>
 
@@ -252,6 +256,40 @@
         <div class="armory-action-bar">
           <button class="btn-armory" id="btn-equip-weapon">EQUIPADA</button>
           <div class="armory-status-tag" id="loadout-status-tag">EN SERVICIO</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="armory-showcase-stage" class="armory-showcase-stage">
+      <div id="showcase-hud-top" class="showcase-hud-top">
+        <div class="showcase-mode-row">
+          <span class="showcase-pill pill-inspect" id="showcase-inspect-pill">INSPECCIONANDO</span>
+          <span class="showcase-pill pill-state" id="showcase-state-pill">DESBLOQUEADA</span>
+        </div>
+        <div class="showcase-title" id="showcase-title">MK-7 CARBINE</div>
+        <div class="showcase-sub" id="showcase-sub">FUSILES DE ASALTO &bull; 5.56 NATO</div>
+        <div class="showcase-note" id="showcase-note"></div>
+      </div>
+
+      <div id="showcase-hud-bottom" class="showcase-hud-bottom">
+        <div class="showcase-context-grid">
+          <div class="ctx-card ctx-editing" id="ctx-editing-card">
+            <span class="ctx-label">EDITANDO CLASE</span>
+            <b id="ctx-editing-name">ASALTO 1</b>
+            <span class="ctx-weapons" id="ctx-editing-weapons">[1] MK-7 &bull; [2] VAC&Iacute;A</span>
+          </div>
+          <div class="ctx-card ctx-deploy" id="ctx-deploy-card">
+            <span class="ctx-label">DESPLIEGUE ACTIVO &bigstar;</span>
+            <b id="ctx-deploy-name">ASALTO 1</b>
+            <span class="ctx-weapons" id="ctx-deploy-weapons">[1] MK-7 &bull; [2] VAC&Iacute;A</span>
+          </div>
+        </div>
+        <div class="showcase-controls-row">
+          <span class="showcase-diff-hint" id="showcase-diff-hint"></span>
+          <div class="showcase-actions">
+            <span class="showcase-controls-hint">ARRASTRAR: ROTAR &bull; RUEDA: ZOOM</span>
+            <button type="button" class="btn-showcase-reset" id="btn-showcase-reset">RECENTRAR VISTA</button>
+          </div>
         </div>
       </div>
     </div>
