@@ -280,6 +280,8 @@ function renderLoadoutsBar() {
       activeArmoryCat = 'PISTOL';
       if (currentEditing && currentEditing.secondary) {
         activeInspectedWeaponId = currentEditing.secondary;
+      } else {
+        activeInspectedWeaponId = 'p12';
       }
       btnSec.classList.add('active');
       if (btnPrim) btnPrim.classList.remove('active');
@@ -288,6 +290,104 @@ function renderLoadoutsBar() {
       });
       ensureActiveCategoryVisible(true);
       renderArmoryWeapons();
+    };
+  }
+
+  const btnUnequip = $('btn-unequip-secondary');
+  if (btnUnequip) {
+    if (currentEditing.secondary) {
+      btnUnequip.style.display = 'inline-block';
+      btnUnequip.onclick = (e) => {
+        e.stopPropagation();
+        progression.setLoadoutSecondary(editingLoadoutId, null);
+        renderLoadoutsBar();
+        renderArmoryWeapons();
+      };
+    } else {
+      btnUnequip.style.display = 'none';
+      btnUnequip.onclick = null;
+    }
+  }
+
+  const btnCopy = $('btn-copy-loadout');
+  const copyModal = $('loadout-copy-modal');
+  const copyDesc = $('loadout-copy-desc');
+  const copyTargets = $('loadout-copy-targets');
+  const btnCopyCancel = $('btn-copy-cancel');
+  const btnCopyConfirm = $('btn-copy-confirm');
+
+  if (btnCopy && copyModal && copyTargets && btnCopyCancel && btnCopyConfirm) {
+    copyModal.onclick = (e) => {
+      if (e.target === copyModal) copyModal.style.display = 'none';
+    };
+    btnCopyCancel.onclick = () => {
+      copyModal.style.display = 'none';
+    };
+    btnCopy.onclick = () => {
+      let selectedTargetId = null;
+      btnCopyConfirm.disabled = true;
+      if (copyDesc) {
+        copyDesc.textContent = `Selecciona la clase destino para copiar la configuración de "${currentEditing.name}". Se sobrescribirán sus armas y accesorios.`;
+      }
+      copyTargets.innerHTML = '';
+      const targets = loadouts.filter(l => l.id !== editingLoadoutId);
+      targets.forEach(t => {
+        const tBtn = document.createElement('button');
+        tBtn.type = 'button';
+        tBtn.className = 'loadout-target-btn';
+        const pName = formatWeaponBadgeName(t.primary);
+        const sName = formatWeaponBadgeName(t.secondary);
+        tBtn.textContent = `${t.name} — [1] ${pName} / [2] ${sName}`;
+        tBtn.onclick = () => {
+          selectedTargetId = t.id;
+          btnCopyConfirm.disabled = false;
+          copyTargets.querySelectorAll('.loadout-target-btn').forEach(b => {
+            b.classList.toggle('selected', b === tBtn);
+          });
+        };
+        copyTargets.appendChild(tBtn);
+      });
+      copyModal.style.display = 'flex';
+
+      btnCopyConfirm.onclick = () => {
+        if (!selectedTargetId) return;
+        progression.copyLoadout(editingLoadoutId, selectedTargetId);
+        copyModal.style.display = 'none';
+        renderLoadoutsBar();
+        renderArmoryWeapons();
+      };
+    };
+  }
+
+  const btnReset = $('btn-reset-loadout');
+  const resetModal = $('loadout-reset-modal');
+  const resetDesc = $('loadout-reset-desc');
+  const btnResetCancel = $('btn-reset-cancel');
+  const btnResetConfirm = $('btn-reset-confirm');
+
+  if (btnReset && resetModal && btnResetCancel && btnResetConfirm) {
+    resetModal.onclick = (e) => {
+      if (e.target === resetModal) resetModal.style.display = 'none';
+    };
+    btnResetCancel.onclick = () => {
+      resetModal.style.display = 'none';
+    };
+    btnReset.onclick = () => {
+      if (resetDesc) {
+        resetDesc.textContent = `¿Restablecer "${currentEditing.name}" a su configuración predeterminada de fábrica? Se restaurarán las armas base y se borrarán todos los accesorios.`;
+      }
+      resetModal.style.display = 'flex';
+
+      btnResetConfirm.onclick = () => {
+        progression.resetLoadoutToDefault(editingLoadoutId);
+        resetModal.style.display = 'none';
+        const curDep = progression.getActiveLoadout();
+        if (editingLoadoutId === curDep.id) {
+          setLobbyWeapon(curDep.primary, curDep.weaponAttachments?.[curDep.primary]);
+        }
+        renderLoadoutsBar();
+        renderArmoryWeapons();
+      };
     };
   }
 }
@@ -906,24 +1006,38 @@ function renderInspectedWeapon() {
     $('bar-mag').style.width = '0%'; $('val-mag').textContent = '--';
   }
 
-  const isEquippedInSlot = (w.category === 'PISTOL' || w.category === 'MELEE')
+  const isEquippedInEditing = (w.category === 'PISTOL' || w.category === 'MELEE')
     ? (curLoadout.secondary === w.id)
     : (curLoadout.primary === w.id);
+  const isEquippedInDeploy = (w.category === 'PISTOL' || w.category === 'MELEE')
+    ? (activeDeploy.secondary === w.id)
+    : (activeDeploy.primary === w.id);
+  const isEquippedInSlot = isEquippedInEditing;
 
   if (btnEquip && statusTag) {
     btnEquip.onclick = null;
-    if (isEquippedInSlot) {
+    statusTag.className = 'status-tag';
+    if (isEquippedInEditing) {
       btnEquip.textContent = 'EQUIPADA';
       btnEquip.className = 'btn-armory equipped';
       btnEquip.disabled = true;
-      statusTag.textContent = curLoadout.id === activeDeploy.id
-        ? `EN ${curLoadout.name} (DESPLIEGUE ★)`
-        : `EQUIPADA EN ${curLoadout.name}`;
+      if (curLoadout.id === activeDeploy.id) {
+        statusTag.textContent = 'EN CLASE ACTIVA (DESPLIEGUE ★)';
+        statusTag.className = 'status-tag st-active-deploy';
+      } else {
+        statusTag.textContent = `EQUIPADA EN ${curLoadout.name}`;
+        statusTag.className = 'status-tag st-editing-loadout';
+      }
     } else if (w.status === 'UNLOCKED') {
       btnEquip.textContent = 'EQUIPAR';
       btnEquip.className = 'btn-armory';
       btnEquip.disabled = false;
-      statusTag.textContent = `LISTA PARA ${curLoadout.name}`;
+      if (isEquippedInDeploy) {
+        statusTag.textContent = `EN DESPLIEGUE (${activeDeploy.name} ★)`;
+        statusTag.className = 'status-tag st-active-deploy-other';
+      } else {
+        statusTag.textContent = `LISTA PARA ${curLoadout.name}`;
+      }
       btnEquip.onclick = () => {
         let ok = false;
         if (w.category === 'PISTOL' || w.category === 'MELEE') {
@@ -1264,6 +1378,8 @@ function clearInput() {
   for (const k in keys) keys[k] = false;
   mouseDown = false;
   adsDown = false;
+  const crossEl = $('crosshair');
+  if (crossEl) crossEl.style.opacity = '1';
 }
 
 function requestLock() {
@@ -1890,7 +2006,7 @@ function startGame(mode) {
 
   const activeLoadout = progression.getActiveLoadout();
   const primId = activeLoadout.primary || 'mk7';
-  const secId = activeLoadout.secondary || (progression.isWeaponUnlocked('p12', progression.getPlayerInfo().level) ? 'p12' : null);
+  const secId = (typeof activeLoadout.secondary === 'string' && activeLoadout.secondary) ? activeLoadout.secondary : null;
   const primDef = WEAPONS[primId] || WEAPONS.mk7;
   const secDef = secId ? WEAPONS[secId] : null;
   const primAtt = cloneAttachments(activeLoadout.weaponAttachments?.[primId]);
@@ -2123,6 +2239,8 @@ function stepSim(dt) {
     const adsZoom = weapon.adsZoomOffset || 25;
     camera.fov = settings.fov - adsZoom * adsAmount;
     camera.updateProjectionMatrix();
+    const crossEl = $('crosshair');
+    if (crossEl) crossEl.style.opacity = Math.max(0, 1 - adsAmount * 3);
 
     if (combatSession.switching) {
       combatSession.switchTimer -= dt;
@@ -2643,6 +2761,14 @@ window.__bp.combatSession = combatSession;
 window.__bp.switchWeaponSlot = switchWeaponSlot;
 window.__bp.syncSlotToActiveWeapon = syncSlotToActiveWeapon;
 window.__bp.getAdsState = () => ({ adsDown, adsAmount });
+window.__bp.camera = camera;
+window.__bp.gunGroup = gunGroup;
+window.__bp.getEditingLoadoutId = () => editingLoadoutId;
+window.__bp.setEditingLoadoutId = (id) => {
+  editingLoadoutId = id;
+  renderLoadoutsBar();
+  renderArmoryWeapons();
+};
 window.__bp.getLobbyWeaponId = getLobbyWeaponId;
 window.__bp.setShowcaseWeapon = setShowcaseWeapon;
 window.__bp.rotateShowcase = rotateShowcase;
@@ -2652,6 +2778,8 @@ window.__bp.getShowcaseState = getShowcaseState;
 window.__bp.getShowcaseScreenBounds = getShowcaseScreenBounds;
 window.__bp.getOperatorScreenBounds = getOperatorScreenBounds;
 window.__bp.getCurrentTab = () => currentTab;
+window.__bp.switchTab = switchTab;
+window.__bp.backToMenu = backToMenu;
 window.__bp.attachments = {
   catalog: ATTACHMENT_CATALOG,
   slots: ATTACHMENT_SLOTS,

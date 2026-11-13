@@ -25,26 +25,26 @@ export const SHARED_ATTACHMENT_GEOMETRIES = [SHARED_RETICLE_DOT_GEO];
 
 export const WEAPON_ATTACHMENT_ANCHORS = {
   mk7: {
-    optic: { pos: [0, 0.075, -0.06], rot: [0, 0, 0], scale: 1.0, hides: ['optic_default', 'sight_front'], adsYOffset: 0.064 },
+    optic: { pos: [0, 0.075, -0.06], rot: [0, 0, 0], scale: 1.0, hides: ['optic_default', 'sight_front'], adsYOffset: -0.015, adsYOffsetRedDot: -0.015, adsYOffsetHolo: -0.018 },
     muzzle: { pos: [0, 0.012, -0.735], rot: [0, 0, 0], scale: 1.0, hides: ['muzzle_default'] },
     magazine: { pos: [0, -0.14, -0.04], rot: [0.18, 0, 0], scale: 1.0, hides: ['magazine_default'] },
     underbarrel: { pos: [0, -0.08, -0.33], rot: [0, 0, 0], scale: 1.0, hides: [] },
     stock: { pos: [0, -0.01, 0.19], rot: [0, 0, 0], scale: 1.0, hides: ['stock_default'] }
   },
   vector9: {
-    optic: { pos: [0, 0.078, -0.05], rot: [0, 0, 0], scale: 0.92, hides: ['optic_default'], adsYOffset: 0.06 },
+    optic: { pos: [0, 0.078, -0.05], rot: [0, 0, 0], scale: 0.92, hides: ['optic_default'], adsYOffset: -0.005, adsYOffsetRedDot: -0.005, adsYOffsetHolo: -0.0078 },
     muzzle: { pos: [0, 0.018, -0.47], rot: [0, 0, 0], scale: 0.94, hides: [] },
     magazine: { pos: [0, -0.22, -0.16], rot: [-0.12, 0, 0], scale: 0.92, hides: ['magazine_default'] },
     underbarrel: { pos: [0, -0.021, -0.27], rot: [0, 0, 0], scale: 0.9, hides: [] },
     stock: { pos: [0, 0.01, 0.11], rot: [0, 0, 0], scale: 0.92, hides: ['stock_default'] }
   },
   m870: {
-    optic: { pos: [0, 0.0625, -0.04], rot: [0, 0, 0], scale: 0.95, hides: [], adsYOffset: 0.078 },
+    optic: { pos: [0, 0.0625, -0.04], rot: [0, 0, 0], scale: 0.95, hides: [], adsYOffset: -0.01425, adsYOffsetRedDot: -0.01425, adsYOffsetHolo: -0.0171 },
     muzzle: { pos: [0, 0.038, -0.8], rot: [0, 0, 0], scale: 1.05, hides: [] },
     stock: { pos: [0, -0.015, 0.22], rot: [0, 0, 0], scale: 1.0, hides: ['stock_default'] }
   },
   p12: {
-    optic: { pos: [0, 0.0475, 0.0], rot: [0, 0, 0], scale: 0.68, hides: ['optic_default'], adsYOffset: 0.085 },
+    optic: { pos: [0, 0.0475, 0.0], rot: [0, 0, 0], scale: 0.68, hides: ['optic_default'], adsYOffset: -0.0065, adsYOffsetRedDot: -0.0065, adsYOffsetHolo: -0.0065 },
     muzzle: { pos: [0, 0.015, -0.29], rot: [0, 0, 0], scale: 0.72, hides: [] },
     magazine: { pos: [0, -0.155, 0.055], rot: [-0.28, 0, 0], scale: 0.72, hides: [] }
   }
@@ -236,9 +236,13 @@ export function applyAttachmentsToModel(modelRoot, weaponId, attachmentMap = nul
       for (const role of anchor.hides) hiddenRoles.add(role);
     }
 
-    if (targetId === 'optic_reddot' || targetId === 'optic_holo') {
-      if (anchor && Number.isFinite(anchor.adsYOffset)) {
-        adsYOffset = anchor.adsYOffset;
+    if (targetId === 'optic_reddot') {
+      if (anchor && Number.isFinite(anchor.adsYOffsetRedDot ?? anchor.adsYOffset)) {
+        adsYOffset = anchor.adsYOffsetRedDot ?? anchor.adsYOffset;
+      }
+    } else if (targetId === 'optic_holo') {
+      if (anchor && Number.isFinite(anchor.adsYOffsetHolo ?? anchor.adsYOffset)) {
+        adsYOffset = anchor.adsYOffsetHolo ?? anchor.adsYOffset;
       }
     }
 

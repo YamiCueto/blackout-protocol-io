@@ -126,16 +126,23 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Se
 .loadout-tab-btn:hover{background:rgba(255,255,255,0.08);color:#fff}
 .loadout-tab-btn.active{background:rgba(255,106,0,0.18);border-color:var(--accent);color:var(--accent)}
 .loadout-tab-btn.deploy-active{border-bottom:2px solid #48bb78}
-.loadout-meta-row{display:flex;align-items:center;gap:8px}
-.loadout-name-input{flex:1;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.14);color:#fff;font-family:inherit;font-size:11px;font-weight:800;letter-spacing:1.5px;padding:5px 9px;outline:none}
+.loadout-meta-row{display:flex;align-items:center;gap:4px;flex-wrap:nowrap}
+.loadout-name-input{flex:1;min-width:85px;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.14);color:#fff;font-family:inherit;font-size:10px;font-weight:800;letter-spacing:1px;padding:4px 6px;outline:none}
 .loadout-name-input:focus{border-color:var(--accent)}
-.btn-loadout-deploy{background:var(--accent);color:#0b0f14;border:none;font-family:inherit;font-size:9.5px;font-weight:900;letter-spacing:1.5px;padding:5px 10px;cursor:pointer;transition:all .15s ease;white-space:nowrap}
+.btn-loadout-deploy{background:var(--accent);color:#0b0f14;border:none;font-family:inherit;font-size:9px;font-weight:900;letter-spacing:1px;padding:4px 7px;cursor:pointer;transition:all .15s ease;white-space:nowrap}
 .btn-loadout-deploy:hover{background:#ff8a3c}
-.badge-deploy-status{font-size:9px;font-weight:800;letter-spacing:1.5px;color:#48bb78;background:rgba(72,187,120,0.15);border:1px solid rgba(72,187,120,0.4);padding:4px 8px;white-space:nowrap}
+.badge-deploy-status{font-size:8.5px;font-weight:800;letter-spacing:1px;color:#48bb78;background:rgba(72,187,120,0.15);border:1px solid rgba(72,187,120,0.4);padding:4px 6px;white-space:nowrap}
+.loadout-actions-row{display:flex;gap:3px;flex-shrink:0}
+.btn-loadout-action{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.18);color:#cbd5e1;font-family:inherit;font-size:8px;font-weight:800;letter-spacing:.8px;padding:4px 6px;cursor:pointer;white-space:nowrap;transition:all .15s ease}
+.btn-loadout-action:hover{border-color:var(--accent);color:var(--accent);background:rgba(255,106,0,0.12)}
 .loadout-weapon-slots{display:flex;gap:8px}
 .slot-select-btn{flex:1;display:flex;flex-direction:column;gap:2px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);color:#fff;font-family:inherit;padding:5px 9px;cursor:pointer;text-align:left;transition:all .15s ease}
 .slot-select-btn:hover{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.25)}
 .slot-select-btn.active{border-color:var(--accent);background:rgba(255,106,0,0.12)}
+.secondary-slot-wrap{flex:1;display:flex;position:relative}
+.secondary-slot-wrap .slot-select-btn{width:100%}
+.btn-unequip-slot{position:absolute;top:4px;right:4px;background:rgba(239,68,68,0.16);border:1px solid rgba(239,68,68,0.45);color:#fca5a5;font-family:inherit;font-size:8px;font-weight:800;letter-spacing:.8px;padding:2px 6px;cursor:pointer;transition:all .15s ease;z-index:2}
+.btn-unequip-slot:hover{background:#ef4444;color:#fff}
 .slot-tag{font-size:8.5px;font-weight:800;letter-spacing:1.5px;color:#94a3b8}
 .slot-select-btn b{font-size:11px;letter-spacing:1px;color:var(--hud);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .armory-cat-bar{flex-shrink:0;display:flex;align-items:center;gap:5px;width:100%;min-width:0}
@@ -340,6 +347,28 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Se
 #lobby-keys{position:fixed;right:36px;bottom:24px;display:flex;gap:16px;flex-wrap:wrap;justify-content:flex-end;font-size:11px;letter-spacing:1px;opacity:.75;pointer-events:none;z-index:12;margin-top:0}
 #lobby-keys b{color:var(--accent);margin-right:4px}
 
+.loadout-modal{position:fixed;inset:0;background:rgba(0,0,0,0.78);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;pointer-events:auto}
+.loadout-modal-content{background:linear-gradient(180deg,#12161f 0%,#090c12 100%);border:1px solid rgba(56,189,248,0.35);box-shadow:0 0 35px rgba(0,0,0,0.85);max-width:440px;width:100%;padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+.loadout-modal-header{font-size:12px;font-weight:900;letter-spacing:2px;color:var(--accent);text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:6px}
+.loadout-modal-desc{font-size:11px;line-height:1.5;color:#cbd5e1;margin:0}
+.loadout-modal-targets{display:flex;flex-direction:column;gap:5px;max-height:180px;overflow-y:auto}
+.loadout-target-btn{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.15);color:#cbd5e1;font-family:inherit;font-size:10px;font-weight:800;letter-spacing:1.2px;padding:8px 12px;text-align:left;cursor:pointer;transition:all .15s ease}
+.loadout-target-btn:hover{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.3)}
+.loadout-target-btn.selected{border-color:var(--accent);background:rgba(255,106,0,0.18);color:#fff}
+.loadout-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+.btn-modal-cancel,.btn-modal-confirm{font-family:inherit;font-size:9.5px;font-weight:800;letter-spacing:1.5px;padding:6px 14px;cursor:pointer;transition:all .15s ease}
+.btn-modal-cancel{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:#cbd5e1}
+.btn-modal-cancel:hover{border-color:#cbd5e1;color:#fff}
+.btn-modal-confirm{background:var(--accent);border:none;color:#0b0f14;font-weight:900}
+.btn-modal-confirm:hover:not(:disabled){background:#ff8a3c}
+.btn-modal-confirm:disabled{opacity:.4;cursor:not-allowed}
+.btn-modal-danger{background:#ef4444;color:#fff}
+.btn-modal-danger:hover:not(:disabled){background:#dc2626}
+
+.armory-status-tag.st-active-deploy{background:rgba(14,165,233,0.2);color:#38bdf8;border:1px solid rgba(56,189,248,0.5)}
+.armory-status-tag.st-editing-loadout{background:rgba(255,106,0,0.18);color:var(--accent);border:1px solid rgba(255,106,0,0.45)}
+.armory-status-tag.st-active-deploy-other{background:rgba(72,187,120,0.18);color:#48bb78;border:1px solid rgba(72,187,120,0.45)}
+
 @media(max-height:780px){
   .cust-list{max-height:285px}
   .armory-weapon-detail{gap:5px}
@@ -363,8 +392,12 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Se
   .nav-tab{font-size:11px;letter-spacing:1.5px;padding:8px 10px}
   #player-badge{display:none}
   .lobby-view{inset:54px 0 0 0}
-  #mission-intel,.dossier-panel,#tab-loadout .loadout-panel{left:14px;right:14px;top:64px;width:auto;max-width:none;padding:16px}
-  .armory-showcase-stage{display:none}
+  #mission-intel,.dossier-panel{left:14px;right:14px;top:64px;width:auto;max-width:none;padding:16px}
+  #tab-loadout .loadout-panel{left:14px;right:14px;top:284px;bottom:14px;max-height:calc(100vh - 298px);width:auto;max-width:none;padding:14px;overflow-y:auto}
+  .armory-showcase-stage{display:flex;position:fixed;top:60px;left:14px;right:14px;height:216px;bottom:auto;padding:8px 12px;background:radial-gradient(circle at 50% 50%,rgba(14,165,233,0.08) 0%,rgba(5,7,10,0.5) 100%);border:1px solid rgba(56,189,248,0.22);border-radius:2px;z-index:11}
+  .showcase-hud-bottom{display:none}
+  .showcase-hud-top{gap:4px}
+  .showcase-title{font-size:15px;letter-spacing:2px}
   #mission-intel h2,.dossier-panel h2{font-size:24px;letter-spacing:4px}
   .modes{left:14px;right:14px;bottom:14px;flex-direction:row;gap:10px}
   .mode-card{flex:1;width:auto;padding:10px 12px}

@@ -17,7 +17,7 @@ import { resolveWeaponStats, cloneAttachments } from './attachments.js';
 import { applyAttachmentsToModel, disposeNonSharedGeometries } from './attachment-visuals.js';
 
 export const GUN_HIP = new THREE.Vector3(0.28, -0.26, -0.55);
-export const GUN_ADS = new THREE.Vector3(0, -0.168, -0.42);
+export const GUN_ADS = new THREE.Vector3(0, -0.085, -0.42);
 
 const dark = new THREE.MeshStandardMaterial({ color: 0x1b1d20, roughness: 0.45, metalness: 0.75 });
 const dark2 = new THREE.MeshStandardMaterial({ color: 0x26292d, roughness: 0.6, metalness: 0.55 });
@@ -191,7 +191,7 @@ export const WEAPONS = {
     mobilityMultiplier: 1.0,
     adsSpeed: 12.0,
     hipPos: new THREE.Vector3(0.28, -0.26, -0.55),
-    adsPos: new THREE.Vector3(0, -0.168, -0.42),
+    adsPos: new THREE.Vector3(0, -0.085, -0.42),
     muzzlePos: new THREE.Vector3(0, 0.012, -0.78),
     audio: {
       shot: sfxShot,
@@ -224,7 +224,7 @@ export const WEAPONS = {
     mobilityMultiplier: 1.08,
     adsSpeed: 16.0,
     hipPos: new THREE.Vector3(0.26, -0.25, -0.50),
-    adsPos: new THREE.Vector3(0, -0.170, -0.38),
+    adsPos: new THREE.Vector3(0, -0.096, -0.38),
     muzzlePos: new THREE.Vector3(0, 0.018, -0.50),
     audio: {
       shot: sfxShotVector,
@@ -257,7 +257,7 @@ export const WEAPONS = {
     mobilityMultiplier: 0.94,
     adsSpeed: 9.0,
     hipPos: new THREE.Vector3(0.28, -0.26, -0.56),
-    adsPos: new THREE.Vector3(0, -0.172, -0.45),
+    adsPos: new THREE.Vector3(0, -0.072, -0.45),
     muzzlePos: new THREE.Vector3(0, 0.038, -0.80),
     audio: {
       shot: sfxShotShotgun,
@@ -293,7 +293,7 @@ export const WEAPONS = {
     mobilityMultiplier: 1.12,
     adsSpeed: 18.0,
     hipPos: new THREE.Vector3(0.24, -0.24, -0.44),
-    adsPos: new THREE.Vector3(0, -0.155, -0.34),
+    adsPos: new THREE.Vector3(0, -0.058, -0.34),
     muzzlePos: new THREE.Vector3(0, 0.015, -0.42),
     audio: {
       shot: sfxShotPistol,

@@ -460,6 +460,31 @@ function getShowcaseViewportMetrics() {
   const headerRect = headerEl ? headerEl.getBoundingClientRect() : null;
   const panelRect = panelEl ? panelEl.getBoundingClientRect() : null;
 
+  const stageEl = typeof document !== 'undefined' ? document.getElementById('armory-showcase-stage') : null;
+  const stageRect = stageEl ? stageEl.getBoundingClientRect() : null;
+
+  if (w <= 768 && stageRect && stageRect.height > 50 && stageRect.width > 50) {
+    const left = stageRect.left + 10;
+    const right = stageRect.right - 10;
+    const top = stageRect.top + 8;
+    const bottom = stageRect.bottom - 8;
+    const stageCenterX = (left + right) * 0.5;
+    const stageCenterY = (top + bottom) * 0.5;
+    const freeW = Math.max(100, right - left);
+    const freeH = Math.max(80, bottom - top);
+    return {
+      w,
+      h,
+      aspect: w / h,
+      freeW,
+      freeH,
+      freeWFrac: freeW / w,
+      freeHFrac: freeH / h,
+      ndcX: (stageCenterX / w) * 2 - 1,
+      ndcY: 1 - (stageCenterY / h) * 2
+    };
+  }
+
   const headerBottom = (headerRect && headerRect.height > 0) ? headerRect.bottom : (w <= 768 ? 54 : 64);
   let panelRight = 0;
   if (w > 768) {

@@ -202,16 +202,46 @@
           <input type="text" id="loadout-name-input" class="loadout-name-input" maxlength="24" placeholder="NOMBRE DE CLASE">
           <button id="btn-select-loadout" class="btn-loadout-deploy">DESPLEGAR CON ESTA CLASE</button>
           <span id="loadout-deploy-status" class="badge-deploy-status">SELECCIONADA</span>
+          <div class="loadout-actions-row">
+            <button type="button" id="btn-copy-loadout" class="btn-loadout-action">COPIAR CLASE</button>
+            <button type="button" id="btn-reset-loadout" class="btn-loadout-action">REINICIAR CLASE</button>
+          </div>
         </div>
         <div class="loadout-weapon-slots" id="loadout-weapon-slots">
           <button class="slot-select-btn active" data-slot="primary" id="btn-slot-primary">
             <span class="slot-tag">[ 1 ] PRINCIPAL</span>
             <b id="slot-primary-val">MK-7 CARBINE</b>
           </button>
-          <button class="slot-select-btn" data-slot="secondary" id="btn-slot-secondary">
-            <span class="slot-tag">[ 2 ] SECUNDARIA</span>
-            <b id="slot-secondary-val">P-12 TACTICAL</b>
-          </button>
+          <div class="secondary-slot-wrap">
+            <button class="slot-select-btn" data-slot="secondary" id="btn-slot-secondary">
+              <span class="slot-tag">[ 2 ] SECUNDARIA</span>
+              <b id="slot-secondary-val">P-12 TACTICAL</b>
+            </button>
+            <button type="button" id="btn-unequip-secondary" class="btn-unequip-slot" style="display:none">&times; DESEQUIPAR</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="loadout-copy-modal" class="loadout-modal" style="display:none">
+        <div class="loadout-modal-content">
+          <div class="loadout-modal-header">COPIAR CONFIGURACI&Oacute;N DE CLASE</div>
+          <p id="loadout-copy-desc" class="loadout-modal-desc"></p>
+          <div class="loadout-modal-targets" id="loadout-copy-targets"></div>
+          <div class="loadout-modal-actions">
+            <button type="button" class="btn-modal-cancel" id="btn-copy-cancel">CANCELAR</button>
+            <button type="button" class="btn-modal-confirm" id="btn-copy-confirm" disabled>CONFIRMAR COPIA</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="loadout-reset-modal" class="loadout-modal" style="display:none">
+        <div class="loadout-modal-content">
+          <div class="loadout-modal-header">REINICIAR CLASE</div>
+          <p id="loadout-reset-desc" class="loadout-modal-desc"></p>
+          <div class="loadout-modal-actions">
+            <button type="button" class="btn-modal-cancel" id="btn-reset-cancel">CANCELAR</button>
+            <button type="button" class="btn-modal-confirm btn-modal-danger" id="btn-reset-confirm">CONFIRMAR REINICIO</button>
+          </div>
         </div>
       </div>
       

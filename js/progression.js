@@ -644,6 +644,54 @@ export class ProgressionManager {
     return true;
   }
 
+  resetLoadoutToDefault(loadoutId) {
+    const idx = this.state.loadouts.findIndex(l => l.id === loadoutId);
+    if (idx === -1) return false;
+    const pInfo = this.getPlayerInfo();
+    const p12Unlocked = isWeaponUnlocked('p12', pInfo.level);
+    const target = this.state.loadouts[idx];
+    target.name = DEFAULT_LOADOUT_NAMES[idx] || ('CLASE ' + (idx + 1));
+    target.primary = 'mk7';
+    target.secondary = p12Unlocked ? 'p12' : null;
+    target.weaponAttachments = createDefaultWeaponAttachments();
+    target.updatedAt = Date.now();
+    if (this.state.selectedLoadoutId === loadoutId) {
+      this.state.selectedWeapon = target.primary;
+    }
+    this.save();
+    this.notify({ type: 'loadout_reset', loadoutId, loadout: target });
+    return true;
+  }
+
+  copyLoadout(sourceId, targetId) {
+    if (!sourceId || !targetId || sourceId === targetId) return false;
+    const src = this.state.loadouts.find(l => l.id === sourceId);
+    const dst = this.state.loadouts.find(l => l.id === targetId);
+    if (!src || !dst) return false;
+    const pInfo = this.getPlayerInfo();
+
+    let primary = (typeof src.primary === 'string' && isWeaponUnlocked(src.primary, pInfo.level)) ? src.primary : 'mk7';
+    if (primary === 'p12') primary = 'mk7';
+    let secondary = null;
+    if (src.secondary && isWeaponUnlocked(src.secondary, pInfo.level)) {
+      secondary = src.secondary;
+    }
+
+    const cloned = normalizeLoadoutWeaponAttachments(cloneWeaponAttachmentMaps(src.weaponAttachments), this.state.weapons);
+
+    dst.name = src.name;
+    dst.primary = primary;
+    dst.secondary = secondary;
+    dst.weaponAttachments = cloned;
+    dst.updatedAt = Date.now();
+    if (this.state.selectedLoadoutId === targetId) {
+      this.state.selectedWeapon = dst.primary;
+    }
+    this.save();
+    this.notify({ type: 'loadout_copied', sourceId, targetId, loadout: dst });
+    return true;
+  }
+
   grantPlayerXP(amount) {
     const validAmount = sanitizeNumber(amount, 0);
     if (validAmount <= 0) return null;

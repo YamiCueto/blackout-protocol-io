@@ -15,7 +15,8 @@ const suites = [
   { name: 'test_sprint6.mjs', count: 22, desc: 'Equipamientos personalizados, P-12 Tactical, cambio en combate y regresión' },
   { name: 'test_sprint6_1.mjs', count: 14, desc: 'Exhibición 3D, barra de categorías tácticas, responsividad, aislamiento y memoria' },
   { name: 'test_sprint7.mjs', count: 20, desc: 'Sistema modular de accesorios, personalización 3D, combate, memoria WebGL y migración v3' },
-  { name: 'test_sprint8.mjs', count: 20, desc: 'Sistema de drops, suministros, consumibles de supervivencia y memoria WebGL' }
+  { name: 'test_sprint8.mjs', count: 20, desc: 'Sistema de drops, suministros, consumibles de supervivencia y memoria WebGL' },
+  { name: 'test_sprint8_1.mjs', count: 15, desc: 'Cierre de equipamientos, gestión de clases, responsividad 768px y calibración ADS' }
 ];
 
 async function runSuite(suite) {
