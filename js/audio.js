@@ -150,3 +150,28 @@ export function sfxWeaponSwap() {
   src.connect(bp).connect(g).connect(masterGain); src.start(t);
   setTimeout(() => sfxClick(1200, .12, .03), 80);
 }
+
+export function sfxPickup() {
+  sfxClick(1600, .15, .04);
+  setTimeout(() => sfxClick(2400, .18, .05), 55);
+}
+
+export function sfxHeal() {
+  const ac = audio(), t = ac.currentTime;
+  const o = ac.createOscillator(); o.type = 'sine';
+  o.frequency.setValueAtTime(320, t);
+  o.frequency.exponentialRampToValueAtTime(640, t + 0.22);
+  const g = ac.createGain(); g.gain.setValueAtTime(0.18, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+  o.connect(g).connect(masterGain); o.start(t); o.stop(t + 0.25);
+}
+
+export function sfxStim() {
+  const ac = audio(), t = ac.currentTime;
+  const o = ac.createOscillator(); o.type = 'sawtooth';
+  o.frequency.setValueAtTime(540, t);
+  o.frequency.exponentialRampToValueAtTime(1100, t + 0.18);
+  const g = ac.createGain(); g.gain.setValueAtTime(0.2, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+  o.connect(g).connect(masterGain); o.start(t); o.stop(t + 0.2);
+}

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { $, renderer, scene, camera } from './core.js';
 import { settings, SETTINGS_DEFAULTS, saveSettings } from './settings.js';
-import { audio, applyVolume, sfxShot, sfxClick, sfxReload, sfxHurt, sfxEnemyShot, sfxExplosion, sfxWeaponSwap } from './audio.js';
+import { audio, applyVolume, sfxShot, sfxClick, sfxReload, sfxHurt, sfxEnemyShot, sfxExplosion, sfxWeaponSwap, sfxPickup, sfxHeal, sfxStim } from './audio.js';
 import { ARENA, moon, pushOutCircle, pointBlocked, solidMeshes } from './world.js';
 import { spawnTracer, spawnBurst, spawnDecal, updateEffects, resetEffects } from './effects.js';
 import { weapon, gunGroup, muzzleFlash, flashSprite, GUN_HIP, GUN_ADS, setWeapon, WEAPONS, getDamageWithDropoff } from './weapon.js';
@@ -41,6 +41,27 @@ import {
   compareWeaponStats
 } from './attachments.js';
 import { SHARED_ATTACHMENT_GEOMETRIES } from './attachment-visuals.js';
+import { MAX_PLAYER_HP, SUPPLY_CATALOG, getSupplyDef } from './supplies.js';
+import {
+  createConsumablesState,
+  canAddConsumable,
+  addConsumable,
+  startMedkitUse,
+  cancelMedkitUse,
+  completeMedkitUse,
+  useStim,
+  updateConsumables,
+  getConsumableMobilityMultiplier,
+  resetConsumablesState
+} from './consumables.js';
+import { DropsManager } from './drops.js';
+import {
+  syncDropVisuals,
+  clearDropVisuals,
+  getActiveDropVisualCount,
+  areSharedDropGeometriesIntact,
+  SHARED_DROP_GEOMETRIES
+} from './drop-visuals.js';
 
 /* ---------------- Ajustes: aplicación y UI ---------------- */
 function applySettings() {
@@ -1179,6 +1200,66 @@ function switchWeaponSlot(targetSlot) {
   return true;
 }
 
+const consumablesState = createConsumablesState();
+const dropsManager = new DropsManager({
+  isBlockedFn: (x, z, r) => pointBlocked(x, z, r),
+  bounds: { minX: -ARENA + 2, maxX: ARENA - 2, minZ: -ARENA + 2, maxZ: ARENA - 2 }
+});
+
+function getSlotMaxReserve(slotKey) {
+  const slot = combatSession.slots[slotKey];
+  if (!slot || !slot.id) return 0;
+  if (slot.effectiveStats) {
+    return gameMode === 'snd' ? slot.effectiveStats.reserveSnd : slot.effectiveStats.reserveDefault;
+  }
+  const def = WEAPONS[slot.id];
+  if (!def) return 0;
+  return gameMode === 'snd' ? def.reserveSnd : def.reserveDefault;
+}
+
+function refillSlotReserve(slotKey, amount) {
+  const slot = combatSession.slots[slotKey];
+  if (!slot || !slot.id || amount <= 0) return { added: 0, full: true };
+  if (!combatSession.switching && slotKey === combatSession.activeSlot) {
+    syncActiveWeaponToSlot();
+  }
+  const maxRes = getSlotMaxReserve(slotKey);
+  const before = slot.reserve;
+  if (before >= maxRes) return { added: 0, full: true };
+  const next = Math.min(maxRes, before + Math.round(amount));
+  const added = next - before;
+  slot.reserve = next;
+  if (!combatSession.switching && slotKey === combatSession.activeSlot) {
+    weapon.reserve = next;
+  }
+  updateHUD();
+  return { added, full: next >= maxRes };
+}
+
+function refillCombatAmmo(supplyDef) {
+  if (!supplyDef) return { added: 0, full: true };
+  const curKey = combatSession.activeSlot;
+  const curSlot = combatSession.slots[curKey];
+  const curDef = WEAPONS[curSlot?.id || weapon.id];
+  const frac = supplyDef.magFractionByCategory?.[curDef?.category] || supplyDef.defaultMagFraction || 0.75;
+  const magSize = curSlot?.effectiveStats?.magSize || weapon.magSize || 30;
+  const amount = Math.max(1, Math.round(magSize * frac));
+
+  let res = refillSlotReserve(curKey, amount);
+  if (res.added === 0) {
+    const otherKey = curKey === 'primary' ? 'secondary' : 'primary';
+    const otherSlot = combatSession.slots[otherKey];
+    if (otherSlot && otherSlot.id) {
+      const otherDef = WEAPONS[otherSlot.id];
+      const otherFrac = supplyDef.magFractionByCategory?.[otherDef?.category] || supplyDef.defaultMagFraction || 0.75;
+      const otherMag = otherSlot.effectiveStats?.magSize || otherDef?.magSize || 12;
+      const otherAmt = Math.max(1, Math.round(otherMag * otherFrac));
+      res = refillSlotReserve(otherKey, otherAmt);
+    }
+  }
+  return res;
+}
+
 function clearInput() {
   for (const k in keys) keys[k] = false;
   mouseDown = false;
@@ -1202,6 +1283,51 @@ addEventListener('keydown', e => {
     if (e.code === 'KeyR') tryReload();
     if (e.code === 'Digit1') switchWeaponSlot('primary');
     if (e.code === 'Digit2') switchWeaponSlot('secondary');
+    if (e.code === 'KeyE') {
+      const nearest = dropsManager.findNearestDrop(player.pos.x, player.pos.y, player.pos.z, 2.2);
+      if (nearest) {
+        const def = getSupplyDef(nearest.supplyId);
+        if (def && def.kind === 'ammo') {
+          const r = refillCombatAmmo(def);
+          if (r.added > 0) {
+            dropsManager.pickupDrop(nearest.id);
+            sfxPickup();
+            flashMsg(`+${r.added} MUNICIÓN RECIBIDA`);
+          } else {
+            flashMsg('RESERVAS DE MUNICIÓN LLENAS');
+          }
+        } else if (def && def.kind === 'consumable') {
+          if (canAddConsumable(consumablesState, def.inventoryKey)) {
+            dropsManager.pickupDrop(nearest.id);
+            addConsumable(consumablesState, def.inventoryKey, 1);
+            sfxPickup();
+            flashMsg(`+1 ${def.label}`);
+          } else {
+            flashMsg(`INVENTARIO DE ${def.label} LLENO`);
+          }
+        }
+      }
+    }
+    if (e.code === 'KeyF') {
+      const res = startMedkitUse(consumablesState, player.hp);
+      if (!res.ok) {
+        if (res.reason === 'no_item') flashMsg('SIN BOTIQUINES DISPONIBLES');
+        else if (res.reason === 'full_health') flashMsg('SALUD COMPLETA');
+      } else {
+        sfxClick(900, 0.12, 0.04);
+      }
+    }
+    if (e.code === 'KeyG') {
+      const res = useStim(consumablesState, player.hp);
+      if (!res.ok) {
+        if (res.reason === 'no_item') flashMsg('SIN ESTIMULANTES DISPONIBLES');
+        else if (res.reason === 'cooldown') flashMsg(`ESTIMULANTE EN ENFRIAMIENTO (${Math.ceil(res.remaining)}s)`);
+      } else {
+        player.hp = res.newHp;
+        sfxStim();
+        flashMsg('ESTIMULANTE ACTIVADO (+VELOCIDAD / +20 SALUD)');
+      }
+    }
   }
   if (e.code === 'Escape') {
     if (phase === 'PLAYING') showMenuPause();
@@ -1466,6 +1592,12 @@ function shoot() {
       if (kRes && kRes.playerResult) {
         flashMsg(hitData.isHeadshot ? `+${kRes.playerResult.xpGained} XP (HEADSHOT)` : `+${kRes.playerResult.xpGained} XP`);
       }
+      const curSlot = combatSession.slots[combatSession.activeSlot];
+      const totalAmmo = (curSlot ? curSlot.ammo + curSlot.reserve : weapon.ammo + weapon.reserve);
+      const isAmmoLow = totalAmmo <= (curSlot?.effectiveStats?.magSize || weapon.magSize || 30);
+      dropsManager.onEnemyKilled(enemy.group.position, {
+        playerAmmoLow: isAmmoLow
+      });
     }
   }
 }
@@ -1689,6 +1821,39 @@ function updateHUD() {
       secAmmo.textContent = '-- / --';
     }
   }
+
+  const countMed = $('count-medkit');
+  const countStim = $('count-stim');
+  if (countMed) countMed.textContent = `${consumablesState.inventory.medkit}/2`;
+  if (countStim) countStim.textContent = `${consumablesState.inventory.stim}/2`;
+
+  const progMed = $('progress-medkit');
+  const fillMed = $('fill-medkit');
+  const slotMed = $('slot-medkit');
+  if (consumablesState.activeUse.type === 'medkit') {
+    if (progMed) progMed.style.display = 'block';
+    if (fillMed) {
+      const pct = Math.min(100, Math.round(consumablesState.activeUse.elapsed / consumablesState.activeUse.duration * 100));
+      fillMed.style.width = pct + '%';
+    }
+    if (slotMed) slotMed.classList.add('active');
+  } else {
+    if (progMed) progMed.style.display = 'none';
+    if (slotMed) slotMed.classList.remove('active');
+  }
+
+  const statStim = $('status-stim');
+  const slotStim = $('slot-stim');
+  if (consumablesState.stim.active) {
+    if (statStim) statStim.textContent = `ACTIVO ${consumablesState.stim.remaining.toFixed(1)}s`;
+    if (slotStim) slotStim.classList.add('active');
+  } else if (consumablesState.stim.cooldownRemaining > 0) {
+    if (statStim) statStim.textContent = `ENF ${Math.ceil(consumablesState.stim.cooldownRemaining)}s`;
+    if (slotStim) slotStim.classList.remove('active');
+  } else {
+    if (statStim) statStim.textContent = '';
+    if (slotStim) slotStim.classList.remove('active');
+  }
 }
 
 function damagePlayer(dmg, fromPos) {
@@ -1779,6 +1944,13 @@ function startGame(mode) {
   player.vel.set(0, 0, 0);
   player.pitch = 0;
   player.hp = 100; player.alive = true;
+  cancelMedkitUse(consumablesState);
+  resetConsumablesState(consumablesState);
+  dropsManager.clear();
+  clearDropVisuals();
+  dropsManager.setMode(gameMode);
+  dropsManager.setWave(1);
+  if ($('pickup-prompt')) $('pickup-prompt').style.display = 'none';
   weapon.reloading = false; weapon.recoil = 0;
   weapon.cooldown = 0; weapon.reloadT = 0;
   weapon.reloadStage = 'idle';
@@ -1826,6 +1998,8 @@ function showEndScreen(victory, title, statsHtml) {
 }
 
 function die() {
+  cancelMedkitUse(consumablesState);
+  if ($('pickup-prompt')) $('pickup-prompt').style.display = 'none';
   const stats = gameMode === 'snd'
     ? `BAJAS: ${kills} &nbsp;&middot;&nbsp; AGUANTASTE: ${fmtTime(matchTime - snd.startT)}`
     : `OLEADA ALCANZADA: ${wave} &nbsp;&middot;&nbsp; BAJAS: ${kills}`;
@@ -1859,6 +2033,11 @@ function resumeGame() {
 function backToMenu() {
   phase = 'MENU';
   player.alive = false;
+  cancelMedkitUse(consumablesState);
+  resetConsumablesState(consumablesState);
+  dropsManager.clear();
+  clearDropVisuals();
+  if ($('pickup-prompt')) $('pickup-prompt').style.display = 'none';
   endDelay = 0;
   clearInput();
   document.exitPointerLock();
@@ -1919,7 +2098,7 @@ function stepSim(dt) {
     matchTime += dt;
     /* --- movimiento --- */
     const sprint = keys['ShiftLeft'] && !adsDown;
-    const mobMult = weapon.mobilityMultiplier || 1.0;
+    const mobMult = (weapon.mobilityMultiplier || 1.0) * getConsumableMobilityMultiplier(consumablesState);
     const speed = (sprint ? 8.2 : 5.2) * mobMult;
     const f = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
     const r = new THREE.Vector3(-f.z, 0, f.x);
@@ -2196,9 +2375,12 @@ function stepSim(dt) {
     if (gameMode === 'waves') {
       if (!betweenWaves && !anyAlive) {
         betweenWaves = true;
-        // recompensa
-        weapon.reserve += 60;
-        player.hp = Math.min(100, player.hp + 35);
+        refillSlotReserve('primary', Math.max(1, Math.round(getSlotMaxReserve('primary') * 0.5)));
+        if (combatSession.slots.secondary?.id) {
+          refillSlotReserve('secondary', Math.max(1, Math.round(getSlotMaxReserve('secondary') * 0.5)));
+        }
+        player.hp = Math.min(MAX_PLAYER_HP, player.hp + 35);
+        dropsManager.setWave(wave + 1);
         showWaveSummary();
       }
       if (betweenWaves) {
@@ -2274,6 +2456,65 @@ function stepSim(dt) {
     updateDamageIndicators(dt);
     hitFlash = Math.max(0, hitFlash - dt * 3);
     $('hit-flash').style.opacity = hitFlash * 0.85;
+
+    dropsManager.update(dt);
+    syncDropVisuals(dropsManager.getDrops());
+
+    const cRes = updateConsumables(consumablesState, dt, player.hp);
+    if (cRes.medkitCompleted) {
+      player.hp = cRes.newHp;
+      sfxHeal();
+      flashMsg('BOTIQUÍN APLICADO (+50 SALUD)');
+    }
+    if (cRes.stimExpired) {
+      flashMsg('EFECTO DE ESTIMULANTE TERMINADO');
+    }
+
+    const primSlot = combatSession.slots.primary;
+    const secSlot = combatSession.slots.secondary;
+    const primExhausted = !primSlot || !primSlot.id || (primSlot.ammo === 0 && primSlot.reserve === 0);
+    const secExhausted = !secSlot || !secSlot.id || (secSlot.ammo === 0 && secSlot.reserve === 0);
+    if (primExhausted && secExhausted) {
+      const em = dropsManager.checkEmergencyAmmo(player.pos, true);
+      if (em) {
+        flashMsg('SUMINISTRO DE EMERGENCIA DESPLEGADO');
+      }
+    }
+
+    const autoAmmo = dropsManager.findNearestDrop(player.pos.x, player.pos.y, player.pos.z, 1.35);
+    if (autoAmmo && autoAmmo.supplyId === 'ammo_pack') {
+      const primFull = combatSession.slots.primary.reserve >= getSlotMaxReserve('primary');
+      const secFull = !combatSession.slots.secondary?.id || combatSession.slots.secondary.reserve >= getSlotMaxReserve('secondary');
+      if (!primFull || !secFull) {
+        const picked = dropsManager.pickupDrop(autoAmmo.id);
+        if (picked) {
+          const def = getSupplyDef(picked.supplyId);
+          const r = refillCombatAmmo(def);
+          sfxPickup();
+          flashMsg(`+${r.added} MUNICIÓN RECIBIDA`);
+        }
+      }
+    }
+
+    const nearest = dropsManager.findNearestDrop(player.pos.x, player.pos.y, player.pos.z, 2.2);
+    const promptEl = $('pickup-prompt');
+    if (nearest) {
+      const def = getSupplyDef(nearest.supplyId);
+      let canTake = true;
+      if (def && def.kind === 'consumable') {
+        canTake = canAddConsumable(consumablesState, def.inventoryKey);
+      } else if (def && def.kind === 'ammo') {
+        const primFull = combatSession.slots.primary.reserve >= getSlotMaxReserve('primary');
+        const secFull = !combatSession.slots.secondary?.id || combatSession.slots.secondary.reserve >= getSlotMaxReserve('secondary');
+        canTake = !primFull || !secFull;
+      }
+      if (promptEl) {
+        promptEl.style.display = 'block';
+        promptEl.textContent = canTake ? `[ E ] RECOGER ${def.label}` : `[ E ] ${def.label} (LLENO)`;
+      }
+    } else {
+      if (promptEl) promptEl.style.display = 'none';
+    }
 
     updateHUD();
   }
@@ -2427,6 +2668,41 @@ window.__bp.setPreviewAttachment = (wId, slot, attId) => {
 };
 window.__bp.areSharedAttachmentGeometriesIntact = () => {
   return SHARED_ATTACHMENT_GEOMETRIES.every(g => g?.userData?.shared === true && !!g.attributes?.position);
+};
+window.__bp.supplies = {
+  catalog: SUPPLY_CATALOG,
+  getSupplyDef,
+  consumablesState,
+  dropsManager,
+  refillSlotReserve,
+  getSlotMaxReserve,
+  refillCombatAmmo,
+  startMedkitUse: () => {
+    const res = startMedkitUse(consumablesState, player.hp);
+    updateHUD();
+    return res;
+  },
+  cancelMedkitUse: () => {
+    const res = cancelMedkitUse(consumablesState);
+    updateHUD();
+    return res;
+  },
+  useStim: () => {
+    const res = useStim(consumablesState, player.hp);
+    if (res && res.ok && typeof res.newHp === 'number') {
+      player.hp = res.newHp;
+    }
+    updateHUD();
+    return res;
+  },
+  getActiveDropVisualCount,
+  areSharedDropGeometriesIntact,
+  SHARED_DROP_GEOMETRIES
+};
+window.__bp.getPlayerHp = () => player.hp;
+window.__bp.setPlayerHp = (hp) => {
+  player.hp = Math.max(0, Math.min(MAX_PLAYER_HP, hp));
+  updateHUD();
 };
 
 applySettings();

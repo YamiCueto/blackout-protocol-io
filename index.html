@@ -16,6 +16,24 @@
     <div id="health-num">100</div>
     <div id="health-bar"><div id="health-fill"></div></div>
   </div>
+  <div class="panel" id="consumables-panel">
+    <div class="consumable-slot" id="slot-medkit">
+      <div class="c-key">[ F ]</div>
+      <div class="c-info">
+        <span class="c-label">BOTIQU&Iacute;N</span>
+        <span class="c-count" id="count-medkit">0/2</span>
+      </div>
+      <div class="c-progress" id="progress-medkit"><div class="c-fill" id="fill-medkit"></div></div>
+    </div>
+    <div class="consumable-slot" id="slot-stim">
+      <div class="c-key">[ G ]</div>
+      <div class="c-info">
+        <span class="c-label">ESTIMULANTE</span>
+        <span class="c-count" id="count-stim">0/2</span>
+      </div>
+      <div class="c-status" id="status-stim"></div>
+    </div>
+  </div>
   <div class="panel" id="ammo-panel">
     <div id="weapon-slot-badge" class="hud-slot-badge">[ 1 ] PRINCIPAL</div>
     <div id="weapon-name">MK-7 Carbine</div>
@@ -32,6 +50,7 @@
     <div id="defuse-bar"><div id="defuse-fill"></div></div>
   </div>
   <div id="reload-hint">[ R ] RECARGAR</div>
+  <div id="pickup-prompt" style="display:none">[ E ] RECOGER MUNICIÓN</div>
   <div id="msg"></div>
   <div id="dmg-indicators"></div>
   <div id="headshot-banner">
