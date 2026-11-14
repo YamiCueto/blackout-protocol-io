@@ -17,7 +17,8 @@ const suites = [
   { name: 'test_sprint7.mjs', count: 20, desc: 'Sistema modular de accesorios, personalización 3D, combate, memoria WebGL y migración v3' },
   { name: 'test_sprint8.mjs', count: 20, desc: 'Sistema de drops, suministros, consumibles de supervivencia y memoria WebGL' },
   { name: 'test_sprint8_1.mjs', count: 15, desc: 'Cierre de equipamientos, gestión de clases, responsividad 768px y calibración ADS' },
-  { name: 'test_sprint8_2.mjs', count: 21, desc: 'Arsenal completo: 5 armas nuevas, cerrojo real AWM-338, combate cuerpo a cuerpo y balance' }
+  { name: 'test_sprint8_2.mjs', count: 21, desc: 'Arsenal completo: 5 armas nuevas, cerrojo real AWM-338, combate cuerpo a cuerpo y balance' },
+  { name: 'test_sprint8_3.mjs', count: 15, desc: 'Animaciones procedurales, brazos tácticos, piezas mecánicas y composición visual' }
 ];
 
 async function runSuite(suite) {
@@ -73,7 +74,7 @@ console.log('-------------------------------------------------------------------
 console.log(`TOTAL GENERAL: ${passedTests}/${totalTests} PRUEBAS PASADAS (100% OK)`);
 console.log('========================================================================================');
 
-if (passedTests !== totalTests || totalTests !== 180) {
+if (passedTests !== totalTests || totalTests !== 195) {
   process.exit(1);
 } else {
   process.exit(0);

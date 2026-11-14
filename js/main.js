@@ -4,7 +4,7 @@ import { settings, SETTINGS_DEFAULTS, saveSettings } from './settings.js';
 import { audio, applyVolume, sfxShot, sfxClick, sfxReload, sfxHurt, sfxEnemyShot, sfxExplosion, sfxWeaponSwap, sfxPickup, sfxHeal, sfxStim, sfxBoltAction, sfxKnifeSlash, sfxKnifeHit } from './audio.js';
 import { ARENA, moon, pushOutCircle, pointBlocked, solidMeshes } from './world.js';
 import { spawnTracer, spawnBurst, spawnDecal, updateEffects, resetEffects } from './effects.js';
-import { weapon, gunGroup, muzzleFlash, flashSprite, GUN_HIP, GUN_ADS, setWeapon, WEAPONS, getDamageWithDropoff } from './weapon.js';
+import { weapon, gunGroup, muzzleFlash, flashSprite, GUN_HIP, GUN_ADS, setWeapon, WEAPONS, getDamageWithDropoff, weaponMeshSubGroup } from './weapon.js';
 import { enemies, makeEnemy, damageEnemy, enemyLOS, clearEnemies, updateCorpses } from './enemies.js';
 import { createDiagnostics } from './diagnostics.js';
 import {
@@ -62,6 +62,7 @@ import {
   areSharedDropGeometriesIntact,
   SHARED_DROP_GEOMETRIES
 } from './drop-visuals.js';
+import { updateViewModel, recordMouseDelta, triggerFireImpulse, resetViewModelState, getViewModelState, armsRig } from './viewmodel-animator.js';
 
 /* ---------------- Ajustes: aplicación y UI ---------------- */
 function applySettings() {
@@ -85,6 +86,10 @@ function refreshSettingsUI() {
   $('set-shadows').value = settings.shadows;
   $('set-volume').value = settings.volume;
   $('val-volume').textContent = settings.volume + '%';
+  if ($('set-reduced-motion')) {
+    $('set-reduced-motion').checked = !!settings.reducedMotion;
+    $('val-reduced-motion').textContent = settings.reducedMotion ? 'ACTIVADO' : 'DESACTIVADO';
+  }
 }
 
 $('set-brightness').oninput = e => {
@@ -106,6 +111,14 @@ $('set-volume').oninput = e => {
   applySettings(); saveSettings();
   sfxClick(1200, 0.12, 0.04);
 };
+if ($('set-reduced-motion')) {
+  $('set-reduced-motion').onchange = e => {
+    settings.reducedMotion = e.target.checked;
+    $('val-reduced-motion').textContent = settings.reducedMotion ? 'ACTIVADO' : 'DESACTIVADO';
+    saveSettings();
+    sfxClick(1200, 0.12, 0.04);
+  };
+}
 
 let activeArmoryCat = 'ASSAULT';
 let activeInspectedWeaponId = 'mk7';
@@ -1321,6 +1334,7 @@ function syncActiveWeaponToSlot() {
   slot.boltT = weapon.boltT || 0;
   slot.meleeStage = weapon.meleeStage || 'idle';
   slot.meleeT = weapon.meleeT || 0;
+  slot.reloadWasEmpty = weapon.reloadWasEmpty || false;
 }
 
 function syncSlotToActiveWeapon(slotKey) {
@@ -1337,6 +1351,7 @@ function syncSlotToActiveWeapon(slotKey) {
   weapon.reloading = slot.reloading;
   weapon.reloadT = slot.reloadT;
   weapon.reloadStage = slot.reloadStage;
+  weapon.reloadWasEmpty = slot.reloadWasEmpty || false;
   weapon.recoil = slot.recoil;
   weapon.semiFired = slot.semiFired || false;
   weapon.boltCycling = slot.boltCycling || false;
@@ -1575,6 +1590,7 @@ document.addEventListener('pointerlockchange', () => {
 document.addEventListener('pointerlockerror', onLockFailed);
 addEventListener('mousemove', e => {
   if (!locked) return;
+  recordMouseDelta(e.movementX, e.movementY);
   player.yaw -= e.movementX * 0.0021;
   player.pitch -= e.movementY * 0.0021;
   player.pitch = Math.max(-1.52, Math.min(1.52, player.pitch));
@@ -1753,6 +1769,7 @@ function shoot() {
   weapon.cooldown = Math.max(0, weapon.cooldown <= 0 ? weapon.cooldown + weapon.fireRate : weapon.fireRate);
   weapon.recoil = Math.min(weapon.recoil + (weapon.recoilKick || 1.0), weapon.recoilMax || 6.0);
   flashTimer = 0.045;
+  triggerFireImpulse(weapon.id, weapon.category);
   const audioOpts = weapon.audioSuppressed ? { suppressed: true } : undefined;
   if (weapon.audio && weapon.audio.shot) {
     weapon.audio.shot(audioOpts);
@@ -1886,6 +1903,7 @@ function tryReload() {
   if (!player.alive || combatSession.switching || combatSession.switchTimer > 0 || weapon.reloading || weapon.boltCycling || weapon.category === 'MELEE' || weapon.fireMode === 'melee' || weapon.ammo >= weapon.magSize || weapon.reserve <= 0) return;
   weapon.reloading = true;
   weapon.reloadT = 0;
+  weapon.reloadWasEmpty = (weapon.ammo === 0);
   adsDown = false;
   adsAmount = 0;
   const scopeEl = $('sniper-scope');
@@ -2562,68 +2580,35 @@ function stepSim(dt) {
     /* --- cámara --- */
     camera.position.copy(player.pos);
     if (moving && player.grounded) bobT += dt * (sprint ? 13 : 9);
-    const bobY = Math.sin(bobT * 2) * 0.017 * (1 - adsAmount * 0.8);
-    const bobX = Math.cos(bobT) * 0.012 * (1 - adsAmount * 0.8);
+    const motCamScale = settings.reducedMotion ? 0.2 : 1.0;
+    const bobY = Math.sin(bobT * 2) * 0.017 * (1 - adsAmount * 0.8) * motCamScale;
+    const bobX = Math.cos(bobT) * 0.012 * (1 - adsAmount * 0.8) * motCamScale;
     camera.position.y += bobY;
     shake = Math.max(0, shake - dt * 2.5);
-    const shk = shake * 0.03;
+    const shk = shake * 0.03 * motCamScale;
     camera.rotation.set(
       player.pitch + weapon.recoil * 0.004 + (Math.random() - .5) * shk,
       player.yaw + (Math.random() - .5) * shk,
-      Math.cos(bobT) * 0.004 * (1 - adsAmount),
+      Math.cos(bobT) * 0.004 * (1 - adsAmount) * motCamScale,
       'YXZ'
     );
 
     /* --- arma: posición, sway, retroceso, recarga --- */
-    const target = tmpV.copy(GUN_HIP).lerp(GUN_ADS, adsAmount);
-    target.x += bobX * 0.6;
-    target.y += bobY * 0.6;
-    target.z += weapon.recoil * 0.013;
-    if (combatSession.switching) {
-      const switchProgress = 1 - (combatSession.switchTimer / combatSession.switchDuration);
-      const dip = Math.sin(switchProgress * Math.PI) * 0.28;
-      target.y -= dip;
-      gunGroup.rotation.x -= dip * 1.5;
-    } else if (weapon.fireMode === 'melee' && weapon.meleeStage && weapon.meleeStage !== 'idle') {
-      if (weapon.meleeStage === 'windup') {
-        const wt = Math.min(1, weapon.meleeT / 0.08);
-        target.x += 0.04 * wt;
-        target.y += 0.03 * wt;
-        gunGroup.rotation.z -= 0.35 * wt;
-      } else if (weapon.meleeStage === 'strike') {
-        const st = Math.min(1, weapon.meleeT / 0.12);
-        target.x += 0.04 - 0.24 * st;
-        target.y += 0.03 - 0.12 * st;
-        gunGroup.rotation.z = -0.35 + 1.3 * st;
-        gunGroup.rotation.y = 0.6 * Math.sin(st * Math.PI);
-      } else if (weapon.meleeStage === 'recovery') {
-        const rt = 1 - Math.min(1, weapon.meleeT / 0.25);
-        target.x -= 0.20 * rt;
-        target.y -= 0.09 * rt;
-        gunGroup.rotation.z += 0.95 * rt;
-      }
-    } else if (weapon.boltCycling) {
-      const bt = Math.min(1, weapon.boltT / (weapon.boltDuration || 0.85));
-      const dip = Math.sin(bt * Math.PI);
-      target.y -= dip * 0.12;
-      gunGroup.rotation.z += dip * 0.22;
-      gunGroup.rotation.x -= dip * 0.16;
-    } else if (weapon.reloading) {
-      if (weapon.reloadType === 'shell') {
-        target.y -= 0.12;
-        gunGroup.rotation.x = -0.35 + Math.sin(weapon.reloadT * 8) * 0.08;
-        gunGroup.rotation.z = 0.25;
-      } else {
-        const t = weapon.reloadT / weapon.reloadTime;
-        target.y -= Math.sin(t * Math.PI) * 0.22;
-        gunGroup.rotation.x = -Math.sin(t * Math.PI) * 0.8;
-      }
-    } else {
-      gunGroup.rotation.x += (weapon.recoil * 0.02 - gunGroup.rotation.x) * Math.min(1, dt * 14);
-    }
-    gunGroup.rotation.z = (sprint && moving && !adsDown ? 0.25 : 0) + Math.cos(bobT) * 0.006;
-    gunGroup.rotation.y = sprint && moving && !adsDown ? 0.3 : 0;
-    gunGroup.position.lerp(target, Math.min(1, dt * 16));
+    const curWpnMesh = weaponMeshSubGroup.children[0] || null;
+    updateViewModel({
+      dt,
+      gunGroup,
+      weapon,
+      weaponMesh: curWpnMesh,
+      combatSession,
+      adsAmount,
+      adsDown,
+      sprint,
+      moving,
+      bobT,
+      baseHip: GUN_HIP,
+      baseAds: GUN_ADS
+    });
 
     /* --- fogonazo --- */
     flashTimer -= dt;
@@ -3111,6 +3096,11 @@ window.__bp.startGame = startGame;
 window.__bp.updateHUD = updateHUD;
 window.__bp.solidMeshes = solidMeshes;
 window.__bp.renderer = renderer;
+window.__bp.getViewModelState = getViewModelState;
+window.__bp.armsRig = armsRig;
+window.__bp.triggerFireImpulse = triggerFireImpulse;
+window.__bp.resetViewModelState = resetViewModelState;
+window.__bp.weaponMeshSubGroup = weaponMeshSubGroup;
 
 applySettings();
 refreshSettingsUI();
