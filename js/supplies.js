@@ -15,7 +15,10 @@ export const SUPPLY_CATALOG = {
       ASSAULT: 0.65,
       SMG: 0.75,
       SHOTGUN: 1.0,
-      PISTOL: 1.0
+      PISTOL: 1.0,
+      LMG: 0.50,
+      SNIPER: 0.60,
+      MELEE: 0.0
     },
     defaultMagFraction: 0.75,
     ttl: 30,

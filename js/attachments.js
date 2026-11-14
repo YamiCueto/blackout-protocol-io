@@ -107,9 +107,14 @@ export const STAT_CONTRACTS = {
 
 const WEAPON_HAS_DROPOFF = {
   mk7: false,
+  ak12: true,
   vector9: true,
+  mp5k: true,
   m870: true,
-  p12: true
+  mk48: true,
+  awm338: true,
+  p12: true,
+  knife: false
 };
 
 export const ATTACHMENT_CATALOG = [
@@ -119,7 +124,7 @@ export const ATTACHMENT_CATALOG = [
     name: 'MIRA PUNTO ROJO',
     shortName: 'PUNTO ROJO',
     unlockWeaponLevel: 3,
-    compatibleWeapons: ['mk7', 'vector9', 'm870', 'p12'],
+    compatibleWeapons: ['mk7', 'ak12', 'vector9', 'mp5k', 'm870', 'mk48', 'awm338', 'p12'],
     visualId: 'optic_reddot',
     description: 'Óptica refleja ligera con retícula iluminada que agiliza el encarado y mejora la precisión al apuntar.',
     modifiers: {
@@ -135,7 +140,7 @@ export const ATTACHMENT_CATALOG = [
     name: 'MIRA HOLOGRÁFICA',
     shortName: 'HOLOGRÁFICA',
     unlockWeaponLevel: 16,
-    compatibleWeapons: ['mk7', 'vector9', 'm870'],
+    compatibleWeapons: ['mk7', 'ak12', 'vector9', 'mp5k', 'm870', 'mk48', 'awm338'],
     visualId: 'optic_holo',
     description: 'Carcasa blindada de amplio campo visual que maximiza la precisión ADS y modera la dispersión sostenida.',
     modifiers: {
@@ -151,7 +156,7 @@ export const ATTACHMENT_CATALOG = [
     name: 'COMPENSADOR TÁCTICO',
     shortName: 'COMPENSADOR',
     unlockWeaponLevel: 5,
-    compatibleWeapons: ['mk7', 'vector9', 'm870', 'p12'],
+    compatibleWeapons: ['mk7', 'ak12', 'vector9', 'mp5k', 'm870', 'mk48', 'awm338', 'p12'],
     visualId: 'muzzle_compensator',
     description: 'Freno de boca ranurado que redirige gases hacia arriba para reducir el retroceso vertical en ráfagas.',
     modifiers: {
@@ -167,7 +172,7 @@ export const ATTACHMENT_CATALOG = [
     name: 'SUPRESOR MONOLÍTICO',
     shortName: 'SUPRESOR',
     unlockWeaponLevel: 20,
-    compatibleWeapons: ['mk7', 'vector9', 'm870', 'p12'],
+    compatibleWeapons: ['mk7', 'ak12', 'vector9', 'mp5k', 'm870', 'mk48', 'awm338', 'p12'],
     visualId: 'muzzle_suppressor',
     description: 'Supresor sellado de grado maestría: atenúa el disparo y fogonazo, estabiliza el cañón y extiende la distancia efectiva.',
     modifiers: {
@@ -186,11 +191,11 @@ export const ATTACHMENT_CATALOG = [
     name: 'CARGADOR AMPLIADO',
     shortName: 'AMPLIADO',
     unlockWeaponLevel: 10,
-    compatibleWeapons: ['mk7', 'vector9', 'p12'],
+    compatibleWeapons: ['mk7', 'ak12', 'vector9', 'mp5k', 'p12'],
     visualId: 'magazine_extended',
     description: 'Aumenta la capacidad del cargador y la reserva proporcionalmente a costa de recarga y manejo algo más lentos.',
     modifiers: {
-      magDeltaByWeapon: { mk7: 10, vector9: 12, p12: 4 },
+      magDeltaByWeapon: { mk7: 10, ak12: 10, vector9: 12, mp5k: 10, p12: 4 },
       reloadDurationMult: 1.15,
       mobilityMult: 0.97
     }
@@ -201,7 +206,7 @@ export const ATTACHMENT_CATALOG = [
     name: 'CARGADOR RÁPIDO',
     shortName: 'RÁPIDO',
     unlockWeaponLevel: 16,
-    compatibleWeapons: ['mk7', 'vector9', 'p12'],
+    compatibleWeapons: ['mk7', 'ak12', 'vector9', 'mp5k', 'p12'],
     visualId: 'magazine_fast',
     description: 'Pestaña de extracción rápida y pozo biselado para reducir drásticamente el tiempo de recarga.',
     modifiers: {
@@ -216,7 +221,7 @@ export const ATTACHMENT_CATALOG = [
     name: 'EMPUÑADURA VERTICAL',
     shortName: 'VERTICAL',
     unlockWeaponLevel: 7,
-    compatibleWeapons: ['mk7', 'vector9'],
+    compatibleWeapons: ['mk7', 'ak12', 'vector9', 'mp5k', 'mk48'],
     visualId: 'underbarrel_vertical',
     description: 'Agarre vertical estriado que absorbe el levantamiento del cañón y acelera la recuperación del retroceso.',
     modifiers: {
@@ -231,7 +236,7 @@ export const ATTACHMENT_CATALOG = [
     name: 'EMPUÑADURA ANGULADA',
     shortName: 'ANGULADA',
     unlockWeaponLevel: 16,
-    compatibleWeapons: ['mk7', 'vector9'],
+    compatibleWeapons: ['mk7', 'ak12', 'vector9', 'mp5k'],
     visualId: 'underbarrel_angled',
     description: 'Tope ergonómico inclinado que acelera el apuntado rápido y cierra la dispersión desde la cadera.',
     modifiers: {
@@ -246,7 +251,7 @@ export const ATTACHMENT_CATALOG = [
     name: 'CULATA LIGERA',
     shortName: 'LIGERA',
     unlockWeaponLevel: 13,
-    compatibleWeapons: ['mk7', 'vector9', 'm870'],
+    compatibleWeapons: ['mk7', 'ak12', 'vector9', 'mp5k', 'm870'],
     visualId: 'stock_light',
     description: 'Armazón esquelético minimalista que mejora la velocidad de desplazamiento y transición ADS.',
     modifiers: {
@@ -261,7 +266,7 @@ export const ATTACHMENT_CATALOG = [
     name: 'CULATA TÁCTICA',
     shortName: 'TÁCTICA',
     unlockWeaponLevel: 16,
-    compatibleWeapons: ['mk7', 'm870'],
+    compatibleWeapons: ['mk7', 'ak12', 'm870', 'awm338'],
     visualId: 'stock_tactical',
     description: 'Culata pesada con apoyo de mejilla y cantonera amortiguada para máximo control y recuperación.',
     modifiers: {
@@ -400,14 +405,14 @@ export function resolveWeaponStats(baseDef, attachmentMap = null) {
   }
 
   const baseMag = baseDef.magSize;
-  const effMag = Math.max(1, Math.round(baseMag + magDelta));
-  const magRatio = effMag / baseMag;
-  const effReserveDefault = magDelta === 0
+  const effMag = baseMag <= 0 ? 0 : Math.max(1, Math.round(baseMag + magDelta));
+  const magRatio = baseMag > 0 ? (effMag / baseMag) : 1;
+  const effReserveDefault = baseMag <= 0 ? 0 : (magDelta === 0
     ? baseDef.reserveDefault
-    : Math.max(effMag, Math.round(baseDef.reserveDefault * magRatio));
-  const effReserveSnd = magDelta === 0
+    : Math.max(effMag, Math.round(baseDef.reserveDefault * magRatio)));
+  const effReserveSnd = baseMag <= 0 ? 0 : (magDelta === 0
     ? baseDef.reserveSnd
-    : Math.max(effMag, Math.round(baseDef.reserveSnd * magRatio));
+    : Math.max(effMag, Math.round(baseDef.reserveSnd * magRatio)));
 
   let effDropoff = null;
   if (baseDef.dropoff && typeof baseDef.dropoff === 'object') {

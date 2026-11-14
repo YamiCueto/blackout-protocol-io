@@ -140,8 +140,10 @@ assert.strictEqual(getWeaponStatus(WEAPON_CATALOG.find(x => x.id === 'm870'), 1)
 assert.strictEqual(getWeaponStatus(WEAPON_CATALOG.find(x => x.id === 'm870'), 8), 'UNLOCKED');
 
 assert.strictEqual(isWeaponUnlocked('ak12', 1), false);
-assert.strictEqual(isWeaponUnlocked('ak12', 50), false);
-assert.strictEqual(getWeaponStatus(WEAPON_CATALOG.find(x => x.id === 'ak12'), 50), 'PLANNED');
+assert.strictEqual(isWeaponUnlocked('ak12', 14), true);
+assert.strictEqual(isWeaponUnlocked('ak12', 50), true);
+assert.strictEqual(getWeaponStatus(WEAPON_CATALOG.find(x => x.id === 'ak12'), 1), 'LOCKED');
+assert.strictEqual(getWeaponStatus(WEAPON_CATALOG.find(x => x.id === 'ak12'), 14), 'UNLOCKED');
 
 const mk7 = WEAPON_CATALOG.find(x => x.id === 'mk7');
 assert.strictEqual(getWeaponStatus(mk7, 1), 'UNLOCKED');

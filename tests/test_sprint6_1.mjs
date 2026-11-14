@@ -137,11 +137,8 @@ try {
     if (lockedRes.sc.weaponId !== 'm870' || lockedRes.sc.status !== 'LOCKED' || !lockedRes.btnDisabled || lockedRes.btnText !== 'BLOQUEADA') {
       throw new Error(`Locked weapon showcase mismatch: ${JSON.stringify(lockedRes)}`);
     }
-    if (plannedRes.sc.weaponId !== 'awm338' || plannedRes.sc.implementation !== 'PLANNED' || !plannedRes.btnDisabled || plannedRes.btnText !== 'EN DESARROLLO') {
+    if (plannedRes.sc.weaponId !== 'awm338' || plannedRes.sc.status !== 'LOCKED' || !plannedRes.btnDisabled || plannedRes.btnText !== 'BLOQUEADA') {
       throw new Error(`Planned weapon showcase mismatch: ${JSON.stringify(plannedRes)}`);
-    }
-    if (!plannedRes.pill.includes('PROTOTIPO') || !plannedRes.note.includes('NO JUGABLE')) {
-      throw new Error(`Planned prototype labels missing: ${JSON.stringify(plannedRes)}`);
     }
     return { locked: lockedRes.sc.weaponId, planned: plannedRes.sc.weaponId };
   });

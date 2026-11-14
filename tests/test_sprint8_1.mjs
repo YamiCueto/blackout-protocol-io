@@ -25,7 +25,15 @@ async function capturePng(relPath, width, height) {
   const res = await b.send('Page.captureScreenshot', { format: 'png' });
   const outPath = path.join(ROOT, relPath);
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
-  fs.writeFileSync(outPath, Buffer.from(res.data, 'base64'));
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      fs.writeFileSync(outPath, Buffer.from(res.data, 'base64'));
+      break;
+    } catch (e) {
+      if (attempt === 4) throw e;
+      await b.sleep(120);
+    }
+  }
   return outPath;
 }
 

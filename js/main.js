@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { $, renderer, scene, camera } from './core.js';
 import { settings, SETTINGS_DEFAULTS, saveSettings } from './settings.js';
-import { audio, applyVolume, sfxShot, sfxClick, sfxReload, sfxHurt, sfxEnemyShot, sfxExplosion, sfxWeaponSwap, sfxPickup, sfxHeal, sfxStim } from './audio.js';
+import { audio, applyVolume, sfxShot, sfxClick, sfxReload, sfxHurt, sfxEnemyShot, sfxExplosion, sfxWeaponSwap, sfxPickup, sfxHeal, sfxStim, sfxBoltAction, sfxKnifeSlash, sfxKnifeHit } from './audio.js';
 import { ARENA, moon, pushOutCircle, pointBlocked, solidMeshes } from './world.js';
 import { spawnTracer, spawnBurst, spawnDecal, updateEffects, resetEffects } from './effects.js';
 import { weapon, gunGroup, muzzleFlash, flashSprite, GUN_HIP, GUN_ADS, setWeapon, WEAPONS, getDamageWithDropoff } from './weapon.js';
@@ -550,9 +550,11 @@ function renderArmoryWeapons() {
     card.className = 'weapon-card' + (w.id === activeInspectedWeaponId ? ' selected' : '');
     card.dataset.id = w.id;
 
-    const isEquippedInSlot = (w.category === 'PISTOL' || w.category === 'MELEE')
-      ? (curLoadout.secondary === w.id)
-      : (curLoadout.primary === w.id);
+    const isEquippedInSlot = (w.id === 'mp5k')
+      ? (curLoadout.primary === w.id || curLoadout.secondary === w.id)
+      : ((w.category === 'PISTOL' || w.category === 'MELEE')
+        ? (curLoadout.secondary === w.id)
+        : (curLoadout.primary === w.id));
     let statusClass = 'status-planned';
     let statusLabel = 'PROTOTIPO';
     if (isEquippedInSlot) {
@@ -954,7 +956,12 @@ function renderInspectedWeapon() {
 
   if (attSummaryEl) {
     attSummaryEl.innerHTML = '';
-    if (w.implementation === 'IMPLEMENTED') {
+    if (w.id === 'knife') {
+      const chip = document.createElement('span');
+      chip.className = 'armory-att-chip empty';
+      chip.textContent = 'CUCHILLO TÁCTICO • SIN RANURAS DE ACCESORIOS';
+      attSummaryEl.appendChild(chip);
+    } else if (w.implementation === 'IMPLEMENTED') {
       const equippedCount = ATTACHMENT_SLOTS.reduce((acc, s) => acc + (installed[s.id] ? 1 : 0), 0);
       if (equippedCount === 0) {
         const chip = document.createElement('span');
@@ -988,16 +995,29 @@ function renderInspectedWeapon() {
     const rpm = Math.round(60 / effStats.fireRate);
     const dmgDisplay = effStats.pellets > 1 ? `${effStats.damage * effStats.pellets}` : `${effStats.damage}`;
     const mobPct = Math.round(effStats.mobilityMultiplier * 100);
-    $('bar-dmg').style.width = ratings.damage + '%';
-    $('val-dmg').textContent = dmgDisplay;
-    $('bar-rpm').style.width = ratings.fireRate + '%';
-    $('val-rpm').textContent = rpm + ' RPM';
-    $('bar-ads').style.width = Math.min(100, ratings.accuracy) + '%';
-    $('val-ads').textContent = ratings.accuracy + '%';
-    $('bar-mob').style.width = Math.min(100, mobPct) + '%';
-    $('val-mob').textContent = mobPct + '%';
-    $('bar-mag').style.width = Math.min(100, Math.round(effStats.magSize / 50 * 100)) + '%';
-    $('val-mag').textContent = `${effStats.magSize} / ${effStats.reserveDefault}`;
+    if (w.id === 'knife') {
+      $('bar-dmg').style.width = ratings.damage + '%';
+      $('val-dmg').textContent = dmgDisplay;
+      $('bar-rpm').style.width = ratings.fireRate + '%';
+      $('val-rpm').textContent = rpm + ' RPM';
+      $('bar-ads').style.width = '0%';
+      $('val-ads').textContent = '—';
+      $('bar-mob').style.width = Math.min(100, mobPct) + '%';
+      $('val-mob').textContent = mobPct + '%';
+      $('bar-mag').style.width = '0%';
+      $('val-mag').textContent = '—';
+    } else {
+      $('bar-dmg').style.width = ratings.damage + '%';
+      $('val-dmg').textContent = dmgDisplay;
+      $('bar-rpm').style.width = ratings.fireRate + '%';
+      $('val-rpm').textContent = rpm + ' RPM';
+      $('bar-ads').style.width = Math.min(100, ratings.accuracy) + '%';
+      $('val-ads').textContent = ratings.accuracy + '%';
+      $('bar-mob').style.width = Math.min(100, mobPct) + '%';
+      $('val-mob').textContent = mobPct + '%';
+      $('bar-mag').style.width = Math.min(100, Math.round(effStats.magSize / 50 * 100)) + '%';
+      $('val-mag').textContent = `${effStats.magSize} / ${effStats.reserveDefault}`;
+    }
   } else {
     $('bar-dmg').style.width = '0%'; $('val-dmg').textContent = '--';
     $('bar-rpm').style.width = '0%'; $('val-rpm').textContent = '--';
@@ -1006,12 +1026,25 @@ function renderInspectedWeapon() {
     $('bar-mag').style.width = '0%'; $('val-mag').textContent = '--';
   }
 
-  const isEquippedInEditing = (w.category === 'PISTOL' || w.category === 'MELEE')
-    ? (curLoadout.secondary === w.id)
-    : (curLoadout.primary === w.id);
-  const isEquippedInDeploy = (w.category === 'PISTOL' || w.category === 'MELEE')
-    ? (activeDeploy.secondary === w.id)
-    : (activeDeploy.primary === w.id);
+  const isHybrid = w.id === 'mp5k';
+  const isSecondaryOnly = w.category === 'PISTOL' || w.category === 'MELEE';
+  let isEquippedInEditing = false;
+  if (isHybrid) {
+    isEquippedInEditing = (editingSlot === 'secondary') ? (curLoadout.secondary === w.id) : (curLoadout.primary === w.id);
+  } else if (isSecondaryOnly) {
+    isEquippedInEditing = (curLoadout.secondary === w.id);
+  } else {
+    isEquippedInEditing = (curLoadout.primary === w.id);
+  }
+
+  let isEquippedInDeploy = false;
+  if (isHybrid) {
+    isEquippedInDeploy = (activeDeploy.primary === w.id || activeDeploy.secondary === w.id);
+  } else if (isSecondaryOnly) {
+    isEquippedInDeploy = (activeDeploy.secondary === w.id);
+  } else {
+    isEquippedInDeploy = (activeDeploy.primary === w.id);
+  }
   const isEquippedInSlot = isEquippedInEditing;
 
   if (btnEquip && statusTag) {
@@ -1040,7 +1073,13 @@ function renderInspectedWeapon() {
       }
       btnEquip.onclick = () => {
         let ok = false;
-        if (w.category === 'PISTOL' || w.category === 'MELEE') {
+        if (isHybrid) {
+          if (editingSlot === 'secondary') {
+            ok = progression.setLoadoutSecondary(editingLoadoutId, w.id);
+          } else {
+            ok = progression.setLoadoutPrimary(editingLoadoutId, w.id);
+          }
+        } else if (isSecondaryOnly) {
           editingSlot = 'secondary';
           ok = progression.setLoadoutSecondary(editingLoadoutId, w.id);
         } else {
@@ -1072,18 +1111,24 @@ function renderInspectedWeapon() {
   }
 
   if (btnCustomize) {
-    const canCust = w.implementation === 'IMPLEMENTED' && !!WEAPONS[w.id];
-    const equippedCount = canCust ? Object.values(installed).filter(Boolean).length : 0;
-    btnCustomize.disabled = !canCust;
-    btnCustomize.textContent = equippedCount > 0 ? `PERSONALIZAR (${equippedCount}/5)` : 'PERSONALIZAR';
-    btnCustomize.onclick = () => {
-      if (!canCust) return;
-      setCustomizerOpen(true);
-    };
+    if (w.id === 'knife') {
+      btnCustomize.disabled = true;
+      btnCustomize.textContent = 'FÁBRICA (SIN SLOTS)';
+      btnCustomize.onclick = null;
+    } else {
+      const canCust = w.implementation === 'IMPLEMENTED' && !!WEAPONS[w.id];
+      const equippedCount = canCust ? Object.values(installed).filter(Boolean).length : 0;
+      btnCustomize.disabled = !canCust;
+      btnCustomize.textContent = equippedCount > 0 ? `PERSONALIZAR (${equippedCount}/5)` : 'PERSONALIZAR';
+      btnCustomize.onclick = () => {
+        if (!canCust) return;
+        setCustomizerOpen(true);
+      };
+    }
   }
 
   if (customizerOpen) {
-    if (w.implementation !== 'IMPLEMENTED' || !wDef) {
+    if (w.implementation !== 'IMPLEMENTED' || !wDef || w.id === 'knife') {
       setCustomizerOpen(false);
       return;
     }
@@ -1234,6 +1279,10 @@ const combatSession = {
       reloadStage: 'idle',
       recoil: 0,
       semiFired: false,
+      boltCycling: false,
+      boltT: 0,
+      meleeStage: 'idle',
+      meleeT: 0,
       attachments: cloneAttachments(null),
       effectiveStats: null
     },
@@ -1247,6 +1296,10 @@ const combatSession = {
       reloadStage: 'idle',
       recoil: 0,
       semiFired: false,
+      boltCycling: false,
+      boltT: 0,
+      meleeStage: 'idle',
+      meleeT: 0,
       attachments: cloneAttachments(null),
       effectiveStats: null
     }
@@ -1264,6 +1317,10 @@ function syncActiveWeaponToSlot() {
   slot.reloadStage = weapon.reloadStage;
   slot.recoil = weapon.recoil;
   slot.semiFired = weapon.semiFired || false;
+  slot.boltCycling = weapon.boltCycling || false;
+  slot.boltT = weapon.boltT || 0;
+  slot.meleeStage = weapon.meleeStage || 'idle';
+  slot.meleeT = weapon.meleeT || 0;
 }
 
 function syncSlotToActiveWeapon(slotKey) {
@@ -1282,6 +1339,10 @@ function syncSlotToActiveWeapon(slotKey) {
   weapon.reloadStage = slot.reloadStage;
   weapon.recoil = slot.recoil;
   weapon.semiFired = slot.semiFired || false;
+  weapon.boltCycling = slot.boltCycling || false;
+  weapon.boltT = slot.boltT || 0;
+  weapon.meleeStage = slot.meleeStage || 'idle';
+  weapon.meleeT = slot.meleeT || 0;
 }
 
 function switchWeaponSlot(targetSlot) {
@@ -1300,6 +1361,12 @@ function switchWeaponSlot(targetSlot) {
     combatSession.slots[combatSession.activeSlot].reloading = false;
     combatSession.slots[combatSession.activeSlot].reloadT = 0;
     combatSession.slots[combatSession.activeSlot].reloadStage = 'idle';
+  }
+  if (weapon.meleeStage && weapon.meleeStage !== 'idle') {
+    weapon.meleeStage = 'idle';
+    weapon.meleeT = 0;
+    combatSession.slots[combatSession.activeSlot].meleeStage = 'idle';
+    combatSession.slots[combatSession.activeSlot].meleeT = 0;
   }
 
   adsDown = false;
@@ -1334,6 +1401,8 @@ function getSlotMaxReserve(slotKey) {
 function refillSlotReserve(slotKey, amount) {
   const slot = combatSession.slots[slotKey];
   if (!slot || !slot.id || amount <= 0) return { added: 0, full: true };
+  const def = WEAPONS[slot.id];
+  if (def && (def.category === 'MELEE' || def.fireMode === 'melee')) return { added: 0, full: true };
   if (!combatSession.switching && slotKey === combatSession.activeSlot) {
     syncActiveWeaponToSlot();
   }
@@ -1355,6 +1424,20 @@ function refillCombatAmmo(supplyDef) {
   const curKey = combatSession.activeSlot;
   const curSlot = combatSession.slots[curKey];
   const curDef = WEAPONS[curSlot?.id || weapon.id];
+  if (curDef && (curDef.category === 'MELEE' || curDef.fireMode === 'melee')) {
+    const otherKey = curKey === 'primary' ? 'secondary' : 'primary';
+    const otherSlot = combatSession.slots[otherKey];
+    if (otherSlot && otherSlot.id) {
+      const otherDef = WEAPONS[otherSlot.id];
+      if (otherDef && otherDef.category !== 'MELEE' && otherDef.fireMode !== 'melee') {
+        const otherFrac = supplyDef.magFractionByCategory?.[otherDef?.category] || supplyDef.defaultMagFraction || 0.75;
+        const otherMag = otherSlot.effectiveStats?.magSize || otherDef?.magSize || 12;
+        const otherAmt = Math.max(1, Math.round(otherMag * otherFrac));
+        return refillSlotReserve(otherKey, otherAmt);
+      }
+    }
+    return { added: 0, full: true };
+  }
   const frac = supplyDef.magFractionByCategory?.[curDef?.category] || supplyDef.defaultMagFraction || 0.75;
   const magSize = curSlot?.effectiveStats?.magSize || weapon.magSize || 30;
   const amount = Math.max(1, Math.round(magSize * frac));
@@ -1365,10 +1448,12 @@ function refillCombatAmmo(supplyDef) {
     const otherSlot = combatSession.slots[otherKey];
     if (otherSlot && otherSlot.id) {
       const otherDef = WEAPONS[otherSlot.id];
-      const otherFrac = supplyDef.magFractionByCategory?.[otherDef?.category] || supplyDef.defaultMagFraction || 0.75;
-      const otherMag = otherSlot.effectiveStats?.magSize || otherDef?.magSize || 12;
-      const otherAmt = Math.max(1, Math.round(otherMag * otherFrac));
-      res = refillSlotReserve(otherKey, otherAmt);
+      if (otherDef && otherDef.category !== 'MELEE' && otherDef.fireMode !== 'melee') {
+        const otherFrac = supplyDef.magFractionByCategory?.[otherDef?.category] || supplyDef.defaultMagFraction || 0.75;
+        const otherMag = otherSlot.effectiveStats?.magSize || otherDef?.magSize || 12;
+        const otherAmt = Math.max(1, Math.round(otherMag * otherFrac));
+        res = refillSlotReserve(otherKey, otherAmt);
+      }
     }
   }
   return res;
@@ -1582,9 +1667,75 @@ const raycaster = new THREE.Raycaster();
 raycaster.far = 300;
 let flashTimer = 0;
 
+function performMeleeAttack() {
+  if (weapon.meleeStage && weapon.meleeStage !== 'idle') return;
+  weapon.meleeStage = 'windup';
+  weapon.meleeT = 0;
+  weapon.cooldown = weapon.fireRate || 0.45;
+  weapon.hitEnemies = new Set();
+  sfxKnifeSlash();
+  syncActiveWeaponToSlot();
+}
+
+function checkMeleeHit() {
+  if (!weapon.hitEnemies) weapon.hitEnemies = new Set();
+  const camPos = camera.getWorldPosition(new THREE.Vector3());
+  const camDir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
+  const maxRange = 2.0;
+  const solid = solidMeshes();
+
+  for (const enemy of enemies) {
+    if (!enemy.alive || weapon.hitEnemies.has(enemy)) continue;
+    const enemyPos = enemy.group.position.clone();
+    const enemyMid = enemyPos.clone().add(new THREE.Vector3(0, 0.9, 0));
+    const dist = camPos.distanceTo(enemyMid);
+    if (dist > maxRange) continue;
+
+    const toEnemy = new THREE.Vector3().subVectors(enemyMid, camPos).normalize();
+    const dot = camDir.dot(toEnemy);
+    if (dot < 0.65) continue;
+
+    const ray = new THREE.Raycaster(camPos, toEnemy, 0, dist);
+    const wallHits = ray.intersectObjects(solid, false);
+    if (wallHits.length > 0 && wallHits[0].distance < dist - 0.15) {
+      continue;
+    }
+
+    weapon.hitEnemies.add(enemy);
+    sfxKnifeHit();
+    showHitmarker(false);
+    spawnBurst(enemyMid, 0x990000, 8, 2.5, 0.08, 0.35);
+
+    const dmg = getDamageWithDropoff(weapon, dist, false);
+    waveStats.hits++;
+    waveStats.dealt += Math.round(dmg);
+
+    const killed = damageEnemy(enemy, dmg, enemyMid, false, camDir);
+    if (killed) {
+      kills++;
+      $('kills').textContent = kills;
+      waveStats.kills++;
+      const curWeapon = combatSession.slots[combatSession.activeSlot]?.id || weapon.id || 'knife';
+      const kRes = progression.recordKill(curWeapon, false);
+      updatePlayerHeaderUI();
+      if (kRes && kRes.playerResult) {
+        flashMsg(`+${kRes.playerResult.xpGained} XP (CUCHILLO)`);
+      }
+      dropsManager.onEnemyKilled(enemy.group.position, {
+        playerAmmoLow: false
+      });
+    }
+  }
+}
+
 function shoot() {
   if (combatSession.switching || combatSession.switchTimer > 0) return;
-  if (weapon.fireMode === 'semi' && weapon.semiFired) return;
+  if (weapon.fireMode === 'melee') {
+    performMeleeAttack();
+    return;
+  }
+  if (weapon.boltCycling) return;
+  if ((weapon.fireMode === 'semi' || weapon.fireMode === 'bolt') && weapon.semiFired) return;
   if (weapon.reloading) {
     if (weapon.reloadType === 'shell' && weapon.ammo > 0) {
       weapon.reloading = false;
@@ -1594,7 +1745,7 @@ function shoot() {
     }
   }
   if (weapon.ammo <= 0) { sfxClick(500, .1, .06); weapon.cooldown = 0.25; return; }
-  if (weapon.fireMode === 'semi') {
+  if (weapon.fireMode === 'semi' || weapon.fireMode === 'bolt') {
     weapon.semiFired = true;
   }
   weapon.ammo--;
@@ -1616,6 +1767,19 @@ function shoot() {
         pumpFn();
       }
     }, 280);
+  }
+  if (weapon.fireMode === 'bolt') {
+    weapon.boltCycling = true;
+    weapon.boltT = 0;
+    weapon.boltDuration = weapon.boltDuration || 0.85;
+    adsDown = false;
+    const shotWpnId = weapon.id;
+    const boltFn = weapon.audio?.boltAction || sfxBoltAction;
+    setTimeout(() => {
+      if (phase === 'PLAYING' && player.alive && weapon.id === shotWpnId && weapon.boltCycling && typeof boltFn === 'function') {
+        boltFn();
+      }
+    }, 180);
   }
   syncActiveWeaponToSlot();
 
@@ -1719,9 +1883,14 @@ function shoot() {
 }
 
 function tryReload() {
-  if (!player.alive || combatSession.switching || combatSession.switchTimer > 0 || weapon.reloading || weapon.ammo >= weapon.magSize || weapon.reserve <= 0) return;
+  if (!player.alive || combatSession.switching || combatSession.switchTimer > 0 || weapon.reloading || weapon.boltCycling || weapon.category === 'MELEE' || weapon.fireMode === 'melee' || weapon.ammo >= weapon.magSize || weapon.reserve <= 0) return;
   weapon.reloading = true;
   weapon.reloadT = 0;
+  adsDown = false;
+  adsAmount = 0;
+  const scopeEl = $('sniper-scope');
+  if (scopeEl) scopeEl.style.display = 'none';
+  gunGroup.visible = true;
   if (weapon.reloadType === 'shell') {
     weapon.reloadStage = 'start';
   }
@@ -1904,9 +2073,15 @@ function updateHUD() {
     ? 'linear-gradient(90deg,#b7ff4a,#4caf50)'
     : 'linear-gradient(90deg,#ff5a3c,#c62828)';
   const isReloadingMag = weapon.reloading && weapon.reloadType !== 'shell';
-  $('ammo-num').textContent = combatSession.switching ? '--' : (isReloadingMag ? '--' : weapon.ammo);
-  $('ammo-reserve').textContent = '/ ' + weapon.reserve;
-  $('reload-hint').style.opacity = (!weapon.reloading && weapon.ammo === 0 && weapon.reserve > 0) ? 1 : 0;
+  if (weapon.category === 'MELEE' || weapon.fireMode === 'melee') {
+    $('ammo-num').textContent = '—';
+    $('ammo-reserve').textContent = '';
+    $('reload-hint').style.opacity = 0;
+  } else {
+    $('ammo-num').textContent = combatSession.switching ? '--' : (isReloadingMag ? '--' : weapon.ammo);
+    $('ammo-reserve').textContent = '/ ' + weapon.reserve;
+    $('reload-hint').style.opacity = (!weapon.reloading && weapon.ammo === 0 && weapon.reserve > 0) ? 1 : 0;
+  }
   const alive = enemies.filter(e => e.alive).length;
   $('enemies-left').textContent = 'ENEMIGOS: ' + alive;
   $('damage-vignette').style.opacity = player.hp < 100 ? Math.min(0.9, (100 - player.hp) / 100 * (player.hp < 30 ? 1.2 : 0.7)) : 0;
@@ -1932,7 +2107,12 @@ function updateHUD() {
   }
   if (secAmmo) {
     if (inactiveSlot && inactiveSlot.id) {
-      secAmmo.textContent = `${inactiveSlot.ammo} / ${inactiveSlot.reserve}`;
+      const inDef = WEAPONS[inactiveSlot.id];
+      if (inDef && (inDef.category === 'MELEE' || inDef.fireMode === 'melee')) {
+        secAmmo.textContent = 'MELEE';
+      } else {
+        secAmmo.textContent = `${inactiveSlot.ammo} / ${inactiveSlot.reserve}`;
+      }
     } else {
       secAmmo.textContent = '-- / --';
     }
@@ -2029,6 +2209,10 @@ function startGame(mode) {
     reloadStage: 'idle',
     recoil: 0,
     semiFired: false,
+    boltCycling: false,
+    boltT: 0,
+    meleeStage: 'idle',
+    meleeT: 0,
     attachments: primAtt,
     effectiveStats: primStats
   };
@@ -2043,6 +2227,10 @@ function startGame(mode) {
     reloadStage: 'idle',
     recoil: 0,
     semiFired: false,
+    boltCycling: false,
+    boltT: 0,
+    meleeStage: 'idle',
+    meleeT: 0,
     attachments: secAtt,
     effectiveStats: secStats
   };
@@ -2235,12 +2423,22 @@ function stepSim(dt) {
     collidePlayer(player.pos);
 
     const adsSpd = weapon.adsSpeed || 12.0;
-    adsAmount += ((adsDown ? 1 : 0) - adsAmount) * Math.min(1, dt * adsSpd);
+    const canAds = !weapon.boltCycling && weapon.category !== 'MELEE' && weapon.fireMode !== 'melee';
+    adsAmount += (((adsDown && canAds) ? 1 : 0) - adsAmount) * Math.min(1, dt * adsSpd);
     const adsZoom = weapon.adsZoomOffset || 25;
     camera.fov = settings.fov - adsZoom * adsAmount;
     camera.updateProjectionMatrix();
     const crossEl = $('crosshair');
     if (crossEl) crossEl.style.opacity = Math.max(0, 1 - adsAmount * 3);
+
+    const scopeEl = $('sniper-scope');
+    if (weapon.id === 'awm338' && adsAmount > 0.85) {
+      if (scopeEl) scopeEl.style.display = 'block';
+      gunGroup.visible = false;
+    } else {
+      if (scopeEl) scopeEl.style.display = 'none';
+      gunGroup.visible = true;
+    }
 
     if (combatSession.switching) {
       combatSession.switchTimer -= dt;
@@ -2257,6 +2455,36 @@ function stepSim(dt) {
       }
     }
 
+    if (weapon.fireMode === 'melee' && weapon.meleeStage && weapon.meleeStage !== 'idle') {
+      weapon.meleeT += dt;
+      if (weapon.meleeStage === 'windup' && weapon.meleeT >= 0.08) {
+        weapon.meleeStage = 'strike';
+        weapon.meleeT = 0;
+        checkMeleeHit();
+      } else if (weapon.meleeStage === 'strike') {
+        checkMeleeHit();
+        if (weapon.meleeT >= 0.12) {
+          weapon.meleeStage = 'recovery';
+          weapon.meleeT = 0;
+        }
+      } else if (weapon.meleeStage === 'recovery') {
+        if (weapon.meleeT >= 0.25) {
+          weapon.meleeStage = 'idle';
+          weapon.meleeT = 0;
+          syncActiveWeaponToSlot();
+        }
+      }
+    }
+
+    if (weapon.boltCycling) {
+      weapon.boltT += dt;
+      if (weapon.boltT >= (weapon.boltDuration || 0.85)) {
+        weapon.boltCycling = false;
+        weapon.boltT = 0;
+        syncActiveWeaponToSlot();
+      }
+    }
+
     if (!mouseDown) {
       weapon.semiFired = false;
       const curSlot = combatSession.slots[combatSession.activeSlot];
@@ -2269,8 +2497,8 @@ function stepSim(dt) {
     } else if (weapon.cooldown < -weapon.fireRate) {
       weapon.cooldown = -weapon.fireRate;
     }
-    if (mouseDown && weapon.cooldown <= 0 && !combatSession.switching) {
-      if (weapon.fireMode !== 'semi' || !weapon.semiFired) {
+    if (mouseDown && weapon.cooldown <= 0 && !combatSession.switching && !weapon.boltCycling) {
+      if ((weapon.fireMode !== 'semi' && weapon.fireMode !== 'bolt') || !weapon.semiFired) {
         if (!weapon.reloading || (weapon.reloadType === 'shell' && weapon.ammo > 0)) {
           shoot();
         }
@@ -2356,6 +2584,30 @@ function stepSim(dt) {
       const dip = Math.sin(switchProgress * Math.PI) * 0.28;
       target.y -= dip;
       gunGroup.rotation.x -= dip * 1.5;
+    } else if (weapon.fireMode === 'melee' && weapon.meleeStage && weapon.meleeStage !== 'idle') {
+      if (weapon.meleeStage === 'windup') {
+        const wt = Math.min(1, weapon.meleeT / 0.08);
+        target.x += 0.04 * wt;
+        target.y += 0.03 * wt;
+        gunGroup.rotation.z -= 0.35 * wt;
+      } else if (weapon.meleeStage === 'strike') {
+        const st = Math.min(1, weapon.meleeT / 0.12);
+        target.x += 0.04 - 0.24 * st;
+        target.y += 0.03 - 0.12 * st;
+        gunGroup.rotation.z = -0.35 + 1.3 * st;
+        gunGroup.rotation.y = 0.6 * Math.sin(st * Math.PI);
+      } else if (weapon.meleeStage === 'recovery') {
+        const rt = 1 - Math.min(1, weapon.meleeT / 0.25);
+        target.x -= 0.20 * rt;
+        target.y -= 0.09 * rt;
+        gunGroup.rotation.z += 0.95 * rt;
+      }
+    } else if (weapon.boltCycling) {
+      const bt = Math.min(1, weapon.boltT / (weapon.boltDuration || 0.85));
+      const dip = Math.sin(bt * Math.PI);
+      target.y -= dip * 0.12;
+      gunGroup.rotation.z += dip * 0.22;
+      gunGroup.rotation.x -= dip * 0.16;
     } else if (weapon.reloading) {
       if (weapon.reloadType === 'shell') {
         target.y -= 0.12;
@@ -2588,10 +2840,22 @@ function stepSim(dt) {
       flashMsg('EFECTO DE ESTIMULANTE TERMINADO');
     }
 
-    const primSlot = combatSession.slots.primary;
-    const secSlot = combatSession.slots.secondary;
-    const primExhausted = !primSlot || !primSlot.id || (primSlot.ammo === 0 && primSlot.reserve === 0);
-    const secExhausted = !secSlot || !secSlot.id || (secSlot.ammo === 0 && secSlot.reserve === 0);
+    const isFirearmExhausted = (slot) => {
+      if (!slot || !slot.id) return true;
+      const def = WEAPONS[slot.id];
+      if (def && (def.category === 'MELEE' || def.fireMode === 'melee')) return true;
+      return slot.ammo === 0 && slot.reserve === 0;
+    };
+    const isFirearmFull = (slotKey) => {
+      const slot = combatSession.slots[slotKey];
+      if (!slot || !slot.id) return true;
+      const def = WEAPONS[slot.id];
+      if (def && (def.category === 'MELEE' || def.fireMode === 'melee')) return true;
+      return slot.reserve >= getSlotMaxReserve(slotKey);
+    };
+
+    const primExhausted = isFirearmExhausted(combatSession.slots.primary);
+    const secExhausted = isFirearmExhausted(combatSession.slots.secondary);
     if (primExhausted && secExhausted) {
       const em = dropsManager.checkEmergencyAmmo(player.pos, true);
       if (em) {
@@ -2601,8 +2865,8 @@ function stepSim(dt) {
 
     const autoAmmo = dropsManager.findNearestDrop(player.pos.x, player.pos.y, player.pos.z, 1.35);
     if (autoAmmo && autoAmmo.supplyId === 'ammo_pack') {
-      const primFull = combatSession.slots.primary.reserve >= getSlotMaxReserve('primary');
-      const secFull = !combatSession.slots.secondary?.id || combatSession.slots.secondary.reserve >= getSlotMaxReserve('secondary');
+      const primFull = isFirearmFull('primary');
+      const secFull = isFirearmFull('secondary');
       if (!primFull || !secFull) {
         const picked = dropsManager.pickupDrop(autoAmmo.id);
         if (picked) {
@@ -2622,8 +2886,8 @@ function stepSim(dt) {
       if (def && def.kind === 'consumable') {
         canTake = canAddConsumable(consumablesState, def.inventoryKey);
       } else if (def && def.kind === 'ammo') {
-        const primFull = combatSession.slots.primary.reserve >= getSlotMaxReserve('primary');
-        const secFull = !combatSession.slots.secondary?.id || combatSession.slots.secondary.reserve >= getSlotMaxReserve('secondary');
+        const primFull = isFirearmFull('primary');
+        const secFull = isFirearmFull('secondary');
         canTake = !primFull || !secFull;
       }
       if (promptEl) {
@@ -2751,6 +3015,8 @@ function initShowcaseControls() {
 }
 
 window.__bp = window.__bp || {};
+window.__bp.THREE = THREE;
+window.__bp.scene = scene;
 window.__bp.progression = progression;
 window.__bp.weapon = weapon;
 window.__bp.WEAPONS = WEAPONS;
@@ -2832,6 +3098,19 @@ window.__bp.setPlayerHp = (hp) => {
   player.hp = Math.max(0, Math.min(MAX_PLAYER_HP, hp));
   updateHUD();
 };
+window.__bp.stepSim = stepSim;
+window.__bp.performMeleeAttack = performMeleeAttack;
+window.__bp.checkMeleeHit = checkMeleeHit;
+window.__bp.enemies = enemies;
+window.__bp.makeEnemy = makeEnemy;
+window.__bp.clearEnemies = clearEnemies;
+window.__bp.player = player;
+window.__bp.setMouseDown = (v) => { mouseDown = v; };
+window.__bp.setAdsDown = (v) => { adsDown = v; };
+window.__bp.startGame = startGame;
+window.__bp.updateHUD = updateHUD;
+window.__bp.solidMeshes = solidMeshes;
+window.__bp.renderer = renderer;
 
 applySettings();
 refreshSettingsUI();

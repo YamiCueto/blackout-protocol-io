@@ -1,4 +1,3 @@
-/* Sonido 100% procedural vía WebAudio, con bus maestro de volumen. */
 import { settings } from './settings.js';
 
 let AC = null, masterGain = null;
@@ -87,7 +86,6 @@ export function sfxExplosion() {
   lp.frequency.setValueAtTime(1600, t); lp.frequency.exponentialRampToValueAtTime(60, t + dur);
   const g = ac.createGain(); g.gain.setValueAtTime(0.9, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   src.connect(lp).connect(g).connect(masterGain); src.start(t);
-  // onda sub grave
   const o = ac.createOscillator(); o.type = 'triangle';
   o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(24, t + 0.8);
   const g2 = ac.createGain(); g2.gain.setValueAtTime(0.8, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
@@ -174,4 +172,85 @@ export function sfxStim() {
   const g = ac.createGain(); g.gain.setValueAtTime(0.2, t);
   g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
   o.connect(g).connect(masterGain); o.start(t); o.stop(t + 0.2);
+}
+
+export function sfxShotAk12(opts = {}) {
+  playShotSynth({ dur: 0.24, power: 2.1, lpStart: 4800, lpEnd: 260, noiseGain: 0.54, oscStart: 130, oscEnd: 42, oscDur: 0.11, oscGain: 0.52 }, opts);
+}
+
+export function sfxReloadAk12() {
+  sfxClick(850, .15, .05);
+  setTimeout(() => sfxClick(550, .16, .06), 240);
+  setTimeout(() => sfxClick(1350, .18, .05), 700);
+}
+
+export function sfxShotMp5k(opts = {}) {
+  playShotSynth({ dur: 0.15, power: 2.7, lpStart: 6000, lpEnd: 550, noiseGain: 0.44, oscStart: 210, oscEnd: 75, oscDur: 0.08, oscGain: 0.40 }, opts);
+}
+
+export function sfxReloadMp5k() {
+  sfxClick(1150, .14, .04);
+  setTimeout(() => sfxClick(850, .15, .05), 160);
+  setTimeout(() => sfxClick(1700, .18, .04), 440);
+}
+
+export function sfxShotMk48(opts = {}) {
+  playShotSynth({ dur: 0.28, power: 1.9, lpStart: 3800, lpEnd: 200, noiseGain: 0.65, oscStart: 110, oscEnd: 35, oscDur: 0.14, oscGain: 0.68 }, opts);
+}
+
+export function sfxReloadMk48() {
+  sfxClick(700, .18, .07);
+  setTimeout(() => sfxClick(500, .18, .08), 400);
+  setTimeout(() => sfxClick(1100, .2, .06), 1100);
+  setTimeout(() => sfxClick(1400, .22, .05), 1800);
+}
+
+export function sfxShotAwm(opts = {}) {
+  playShotSynth({ dur: 0.42, power: 1.6, lpStart: 4500, lpEnd: 120, noiseGain: 0.85, oscStart: 85, oscEnd: 20, oscDur: 0.22, oscGain: 0.95 }, opts);
+}
+
+export function sfxBoltAction() {
+  sfxClick(600, .18, .05);
+  setTimeout(() => sfxClick(950, .16, .04), 160);
+  setTimeout(() => sfxClick(1300, .22, .05), 340);
+}
+
+export function sfxReloadAwm() {
+  sfxClick(750, .16, .05);
+  setTimeout(() => sfxClick(600, .18, .06), 280);
+  setTimeout(() => sfxClick(1200, .2, .05), 900);
+}
+
+export function sfxKnifeSlash() {
+  const ac = audio(), t = ac.currentTime;
+  const dur = 0.14;
+  const buf = ac.createBuffer(1, Math.floor(ac.sampleRate * dur), ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.sin((i / d.length) * Math.PI);
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const bp = ac.createBiquadFilter(); bp.type = 'bandpass';
+  bp.frequency.setValueAtTime(800, t);
+  bp.frequency.exponentialRampToValueAtTime(2400, t + dur * 0.5);
+  bp.frequency.exponentialRampToValueAtTime(600, t + dur);
+  const g = ac.createGain(); g.gain.setValueAtTime(0.28, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(bp).connect(g).connect(masterGain);
+  src.start(t);
+}
+
+export function sfxKnifeHit() {
+  const ac = audio(), t = ac.currentTime;
+  const dur = 0.12;
+  const buf = ac.createBuffer(1, Math.floor(ac.sampleRate * dur), ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 1.8);
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const lp = ac.createBiquadFilter(); lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(1400, t);
+  lp.frequency.exponentialRampToValueAtTime(120, t + dur);
+  const g = ac.createGain(); g.gain.setValueAtTime(0.45, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(lp).connect(g).connect(masterGain);
+  src.start(t);
+  sfxClick(2200, .25, .03);
 }

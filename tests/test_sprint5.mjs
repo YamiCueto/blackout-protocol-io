@@ -98,21 +98,23 @@ try {
 
   await step(5, 'planned_weapons_not_equippable', async () => {
     const res = await b.evaluate(`(() => {
-      window.__bp.progression.grantPlayerXP(100000);
       const okAk12 = window.__bp.progression.selectWeapon('ak12');
       const okMp5k = window.__bp.progression.selectWeapon('mp5k');
       const okMk48 = window.__bp.progression.selectWeapon('mk48');
+      const okInvalid = window.__bp.progression.selectWeapon('invalid_gun');
       const current = window.__bp.progression.getState().selectedWeapon;
-      return { okAk12, okMp5k, okMk48, current };
+      return { okAk12, okMp5k, okMk48, okInvalid, current };
     })()`);
-    if (res.okAk12 !== false) throw new Error(`Planned weapon ak12 must return false`);
-    if (res.okMp5k !== false) throw new Error(`Planned weapon mp5k must return false`);
-    if (res.okMk48 !== false) throw new Error(`Planned weapon mk48 must return false`);
+    if (res.okAk12 !== false) throw new Error(`Locked weapon ak12 must return false`);
+    if (res.okMp5k !== false) throw new Error(`Locked weapon mp5k must return false`);
+    if (res.okMk48 !== false) throw new Error(`Locked weapon mk48 must return false`);
+    if (res.okInvalid !== false) throw new Error(`Invalid weapon must return false`);
     return res;
   });
 
   await step(6, 'weapon_selection_persistence', async () => {
     await b.evaluate(`(() => {
+      window.__bp.progression.grantPlayerXP(100000);
       window.__bp.progression.selectWeapon('vector9');
     })()`);
     await b.sleep(300);

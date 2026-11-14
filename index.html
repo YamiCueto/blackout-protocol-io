@@ -11,6 +11,53 @@
 
 <div id="hud">
   <div id="crosshair"><span class="t"></span><span class="b"></span><span class="l"></span><span class="r"></span></div>
+  <div id="sniper-scope" style="display:none;position:absolute;inset:0;pointer-events:none;z-index:45;overflow:hidden;">
+    <svg viewBox="-500 -500 1000 1000" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%;display:block;">
+      <defs>
+        <mask id="scope-mask">
+          <rect x="-1000" y="-1000" width="2000" height="2000" fill="#fff" />
+          <circle cx="0" cy="0" r="340" fill="#000" />
+        </mask>
+        <clipPath id="scope-aperture">
+          <circle cx="0" cy="0" r="340" />
+        </clipPath>
+        <radialGradient id="lens-vignette" cx="50%" cy="50%" r="50%">
+          <stop offset="65%" stop-color="#000" stop-opacity="0" />
+          <stop offset="88%" stop-color="#000" stop-opacity="0.3" />
+          <stop offset="100%" stop-color="#000" stop-opacity="0.8" />
+        </radialGradient>
+      </defs>
+      <rect x="-1000" y="-1000" width="2000" height="2000" fill="#010204" mask="url(#scope-mask)" />
+      <circle cx="0" cy="0" r="343" fill="none" stroke="#000000" stroke-width="7" />
+      <circle cx="0" cy="0" r="340" fill="none" stroke="#252b36" stroke-width="4" />
+      <circle cx="0" cy="0" r="337" fill="none" stroke="#0f1318" stroke-width="2" />
+      <g clip-path="url(#scope-aperture)">
+        <circle cx="0" cy="0" r="340" fill="url(#lens-vignette)" />
+        <circle cx="0" cy="0" r="140" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1" />
+        <line x1="-340" y1="0" x2="340" y2="0" stroke="rgba(255,255,255,0.78)" stroke-width="1.6" />
+        <line x1="0" y1="-340" x2="0" y2="340" stroke="rgba(255,255,255,0.78)" stroke-width="1.6" />
+        <line x1="-340" y1="0" x2="-140" y2="0" stroke="rgba(255,255,255,0.92)" stroke-width="2.6" />
+        <line x1="140" y1="0" x2="340" y2="0" stroke="rgba(255,255,255,0.92)" stroke-width="2.6" />
+        <line x1="0" y1="140" x2="0" y2="340" stroke="rgba(255,255,255,0.92)" stroke-width="2.6" />
+        <line x1="-110" y1="-6" x2="-110" y2="6" stroke="rgba(255,255,255,0.85)" stroke-width="1.4" />
+        <line x1="-80" y1="-4" x2="-80" y2="4" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />
+        <line x1="-50" y1="-6" x2="-50" y2="6" stroke="rgba(255,255,255,0.85)" stroke-width="1.4" />
+        <line x1="-20" y1="-3" x2="-20" y2="3" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />
+        <line x1="20" y1="-3" x2="20" y2="3" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />
+        <line x1="50" y1="-6" x2="50" y2="6" stroke="rgba(255,255,255,0.85)" stroke-width="1.4" />
+        <line x1="80" y1="-4" x2="80" y2="4" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />
+        <line x1="110" y1="-6" x2="110" y2="6" stroke="rgba(255,255,255,0.85)" stroke-width="1.4" />
+        <line x1="-4" y1="-80" x2="4" y2="-80" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />
+        <line x1="-6" y1="-50" x2="6" y2="-50" stroke="rgba(255,255,255,0.85)" stroke-width="1.4" />
+        <line x1="-3" y1="-20" x2="3" y2="-20" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />
+        <line x1="-3" y1="20" x2="3" y2="20" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />
+        <line x1="-6" y1="50" x2="6" y2="50" stroke="rgba(255,255,255,0.85)" stroke-width="1.4" />
+        <line x1="-4" y1="80" x2="4" y2="80" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />
+        <line x1="-6" y1="110" x2="6" y2="110" stroke="rgba(255,255,255,0.85)" stroke-width="1.4" />
+        <circle cx="0" cy="0" r="2.4" fill="#ef4444" />
+      </g>
+    </svg>
+  </div>
   <div id="hitmarker"><span class="t"></span><span class="b"></span><span class="l"></span><span class="r"></span></div>
   <div class="panel" id="health-panel">
     <div id="health-num">100</div>

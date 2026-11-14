@@ -31,20 +31,44 @@ export const WEAPON_ATTACHMENT_ANCHORS = {
     underbarrel: { pos: [0, -0.08, -0.33], rot: [0, 0, 0], scale: 1.0, hides: [] },
     stock: { pos: [0, -0.01, 0.19], rot: [0, 0, 0], scale: 1.0, hides: ['stock_default'] }
   },
+  ak12: {
+    optic: { pos: [0, 0.082, -0.04], rot: [0, 0, 0], scale: 1.0, hides: ['optic_default', 'sight_front'], adsYOffset: -0.015, adsYOffsetRedDot: -0.015, adsYOffsetHolo: -0.018 },
+    muzzle: { pos: [0, 0.014, -0.82], rot: [0, 0, 0], scale: 1.0, hides: ['muzzle_default'] },
+    magazine: { pos: [0, -0.14, -0.14], rot: [0.22, 0, 0], scale: 1.0, hides: ['magazine_default'] },
+    underbarrel: { pos: [0, -0.07, -0.38], rot: [0, 0, 0], scale: 1.0, hides: [] },
+    stock: { pos: [0, 0.01, 0.24], rot: [0, 0, 0], scale: 1.0, hides: ['stock_default'] }
+  },
   vector9: {
-    optic: { pos: [0, 0.078, -0.05], rot: [0, 0, 0], scale: 0.92, hides: ['optic_default'], adsYOffset: -0.005, adsYOffsetRedDot: -0.005, adsYOffsetHolo: -0.0078 },
+    optic: { pos: [0, 0.078, -0.05], rot: [0, 0, 0], scale: 0.92, hides: ['optic_default', 'sight_front'], adsYOffset: -0.005, adsYOffsetRedDot: -0.005, adsYOffsetHolo: -0.0078 },
     muzzle: { pos: [0, 0.018, -0.47], rot: [0, 0, 0], scale: 0.94, hides: [] },
     magazine: { pos: [0, -0.22, -0.16], rot: [-0.12, 0, 0], scale: 0.92, hides: ['magazine_default'] },
     underbarrel: { pos: [0, -0.021, -0.27], rot: [0, 0, 0], scale: 0.9, hides: [] },
     stock: { pos: [0, 0.01, 0.11], rot: [0, 0, 0], scale: 0.92, hides: ['stock_default'] }
   },
+  mp5k: {
+    optic: { pos: [0, 0.072, -0.04], rot: [0, 0, 0], scale: 0.88, hides: ['optic_default', 'sight_front'], adsYOffset: -0.008, adsYOffsetRedDot: -0.008, adsYOffsetHolo: -0.010 },
+    muzzle: { pos: [0, 0.024, -0.38], rot: [0, 0, 0], scale: 0.88, hides: [] },
+    magazine: { pos: [0, -0.18, -0.10], rot: [-0.14, 0, 0], scale: 0.88, hides: ['magazine_default'] },
+    underbarrel: { pos: [0, -0.065, -0.18], rot: [0, 0, 0], scale: 0.82, hides: [] },
+    stock: { pos: [0, 0.005, 0.12], rot: [0, 0, 0], scale: 0.88, hides: ['stock_default'] }
+  },
   m870: {
-    optic: { pos: [0, 0.0625, -0.04], rot: [0, 0, 0], scale: 0.95, hides: [], adsYOffset: -0.01425, adsYOffsetRedDot: -0.01425, adsYOffsetHolo: -0.0171 },
+    optic: { pos: [0, 0.0625, -0.04], rot: [0, 0, 0], scale: 0.95, hides: ['optic_default', 'sight_front'], adsYOffset: -0.01425, adsYOffsetRedDot: -0.01425, adsYOffsetHolo: -0.0171 },
     muzzle: { pos: [0, 0.038, -0.8], rot: [0, 0, 0], scale: 1.05, hides: [] },
     stock: { pos: [0, -0.015, 0.22], rot: [0, 0, 0], scale: 1.0, hides: ['stock_default'] }
   },
+  mk48: {
+    optic: { pos: [0, 0.115, -0.02], rot: [0, 0, 0], scale: 1.05, hides: ['optic_default', 'sight_front'], adsYOffset: -0.016, adsYOffsetRedDot: -0.016, adsYOffsetHolo: -0.019 },
+    muzzle: { pos: [0, 0.02, -0.88], rot: [0, 0, 0], scale: 1.1, hides: [] },
+    underbarrel: { pos: [0, -0.08, -0.42], rot: [0, 0, 0], scale: 1.05, hides: [] }
+  },
+  awm338: {
+    optic: { pos: [0, 0.098, -0.04], rot: [0, 0, 0], scale: 1.1, hides: ['optic_default', 'sight_front'], adsYOffset: -0.018, adsYOffsetRedDot: -0.018, adsYOffsetHolo: -0.020 },
+    muzzle: { pos: [0, 0.024, -0.96], rot: [0, 0, 0], scale: 1.1, hides: [] },
+    stock: { pos: [0, 0.01, 0.32], rot: [0, 0, 0], scale: 1.05, hides: ['stock_default'] }
+  },
   p12: {
-    optic: { pos: [0, 0.0475, 0.0], rot: [0, 0, 0], scale: 0.68, hides: ['optic_default'], adsYOffset: -0.0065, adsYOffsetRedDot: -0.0065, adsYOffsetHolo: -0.0065 },
+    optic: { pos: [0, 0.0475, 0.0], rot: [0, 0, 0], scale: 0.68, hides: ['optic_default', 'sight_front'], adsYOffset: -0.0065, adsYOffsetRedDot: -0.0065, adsYOffsetHolo: -0.0065 },
     muzzle: { pos: [0, 0.015, -0.29], rot: [0, 0, 0], scale: 0.72, hides: [] },
     magazine: { pos: [0, -0.155, 0.055], rot: [-0.28, 0, 0], scale: 0.72, hides: [] }
   }
@@ -93,7 +117,7 @@ function buildOpticRedDot() {
 function buildOpticHolo() {
   const g = new THREE.Group();
   addPart(g, new THREE.BoxGeometry(0.036, 0.013, 0.072), attDark, [0, 0.0065, 0]);
-  addPart(g, new THREE.BoxGeometry(0.034, 0.024, 0.024), attPolymer, [0, 0.024, -0.023]);
+  addPart(g, new THREE.BoxGeometry(0.034, 0.008, 0.024), attPolymer, [0, 0.012, -0.023]);
   addPart(g, new THREE.BoxGeometry(0.006, 0.03, 0.052), attDark, [-0.016, 0.028, 0.004]);
   addPart(g, new THREE.BoxGeometry(0.006, 0.03, 0.052), attDark, [0.016, 0.028, 0.004]);
   addPart(g, new THREE.BoxGeometry(0.038, 0.007, 0.054), attSteel, [0, 0.044, 0.004]);

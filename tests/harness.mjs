@@ -36,7 +36,10 @@ export function serve(root = ROOT) {
     if (!f.startsWith(path.resolve(root))) { res.writeHead(403); return res.end(); }
     fs.readFile(f, (err, data) => {
       if (err) { res.writeHead(404); return res.end('nf'); }
-      res.writeHead(200, { 'content-type': MIME[path.extname(f)] || 'application/octet-stream' });
+      res.writeHead(200, {
+        'content-type': MIME[path.extname(f)] || 'application/octet-stream',
+        'cache-control': 'no-store, no-cache, must-revalidate'
+      });
       res.end(data);
     });
   });
@@ -69,6 +72,7 @@ export async function launch(url, { port = 9333, extra = [] } = {}) {
   });
   const send = (method, params = {}) => new Promise((res, rej) => { const i = ++id; pending.set(i, { res, rej }); ws.send(JSON.stringify({ id: i, method, params })); });
   await send('Runtime.enable'); await send('Log.enable'); await send('Page.enable');
+  await send('Network.enable'); await send('Network.setCacheDisabled', { cacheDisabled: true });
   const evaluate = async (expression) => {
     const r = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true, userGesture: true });
     if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text);

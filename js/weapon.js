@@ -11,7 +11,18 @@ import {
   sfxShellInsert,
   sfxShotPistol,
   sfxReloadPistol,
-  sfxWeaponSwap
+  sfxWeaponSwap,
+  sfxShotAk12,
+  sfxReloadAk12,
+  sfxShotMp5k,
+  sfxReloadMp5k,
+  sfxShotMk48,
+  sfxReloadMk48,
+  sfxShotAwm,
+  sfxBoltAction,
+  sfxReloadAwm,
+  sfxKnifeSlash,
+  sfxKnifeHit
 } from './audio.js';
 import { resolveWeaponStats, cloneAttachments } from './attachments.js';
 import { applyAttachmentsToModel, disposeNonSharedGeometries } from './attachment-visuals.js';
@@ -128,6 +139,7 @@ function buildM870Mesh() {
   stock.userData.partRole = 'stock_default';
   const bead = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.024, 0.012), dark);
   bead.position.set(0, 0.068, -0.76);
+  bead.userData.partRole = 'sight_front';
   const ejector = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.032, 0.12), dark);
   ejector.position.set(0.026, 0.02, -0.04);
 
@@ -154,11 +166,221 @@ function buildP12Mesh() {
   triggerGuard.position.set(0, -0.065, -0.035);
   const sightF = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.02, 0.01), dark);
   sightF.position.set(0, 0.055, -0.17);
+  sightF.userData.partRole = 'sight_front';
   const sightR = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.02, 0.012), dark);
   sightR.position.set(0, 0.055, 0.07);
   sightR.userData.partRole = 'optic_default';
 
   for (const m of [slide, barrel, frame, handle, triggerGuard, sightF, sightR]) {
+    m.castShadow = true;
+    g.add(m);
+  }
+  return g;
+}
+
+function buildAk12Mesh() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.115, 0.46), dark2);
+  body.position.set(0, 0, -0.06);
+  const handguard = new THREE.Mesh(new THREE.BoxGeometry(0.068, 0.095, 0.28), dark);
+  handguard.position.set(0, 0.005, -0.38);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.46, 12), metal);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0, 0.015, -0.62);
+  const muzzleBrake = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.08, 12), dark);
+  muzzleBrake.rotation.x = Math.PI / 2;
+  muzzleBrake.position.set(0, 0.015, -0.86);
+  muzzleBrake.userData.partRole = 'muzzle_default';
+  const gasTube = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.26, 10), dark);
+  gasTube.rotation.x = Math.PI / 2;
+  gasTube.position.set(0, 0.055, -0.38);
+  const mag = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.22, 0.09), dark);
+  mag.position.set(0, -0.14, -0.12);
+  mag.rotation.x = 0.22;
+  mag.userData.partRole = 'magazine_default';
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.16, 0.068), grip);
+  handle.position.set(0, -0.12, 0.11);
+  handle.rotation.x = -0.28;
+  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.058, 0.11, 0.26), dark2);
+  stock.position.set(0, -0.01, 0.29);
+  stock.userData.partRole = 'stock_default';
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.018, 0.38), dark);
+  rail.position.set(0, 0.075, -0.10);
+  const sightR = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.032, 0.02), dark);
+  sightR.position.set(0, 0.082, 0.08);
+  sightR.userData.partRole = 'optic_default';
+  const sightF = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.045, 0.015), dark);
+  sightF.position.set(0, 0.075, -0.64);
+  sightF.userData.partRole = 'sight_front';
+
+  for (const m of [body, handguard, barrel, muzzleBrake, gasTube, mag, handle, stock, rail, sightR, sightF]) {
+    m.castShadow = true;
+    g.add(m);
+  }
+  return g;
+}
+
+function buildMp5kMesh() {
+  const g = new THREE.Group();
+  const receiver = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.30, 12), dark2);
+  receiver.rotation.x = Math.PI / 2;
+  receiver.position.set(0, 0.025, -0.05);
+  const lower = new THREE.Mesh(new THREE.BoxGeometry(0.056, 0.075, 0.26), dark);
+  lower.position.set(0, -0.022, -0.02);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.16, 10), metal);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0, 0.024, -0.26);
+  const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.04, 10), dark);
+  muzzle.rotation.x = Math.PI / 2;
+  muzzle.position.set(0, 0.024, -0.35);
+  muzzle.userData.partRole = 'muzzle_default';
+  const mag = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 0.065), dark);
+  mag.position.set(0, -0.16, -0.10);
+  mag.rotation.x = -0.14;
+  mag.userData.partRole = 'magazine_default';
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.14, 0.062), grip);
+  handle.position.set(0, -0.11, 0.07);
+  handle.rotation.x = -0.26;
+  const vGrip = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.12, 0.052), grip);
+  vGrip.position.set(0, -0.08, -0.20);
+  vGrip.rotation.x = 0.12;
+  vGrip.userData.partRole = 'underbarrel_default';
+  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.09, 0.06), dark2);
+  stock.position.set(0, 0.005, 0.13);
+  stock.userData.partRole = 'stock_default';
+  const sightR = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.03, 10), dark);
+  sightR.rotation.x = Math.PI / 2;
+  sightR.position.set(0, 0.072, 0.05);
+  sightR.userData.partRole = 'optic_default';
+  const sightF = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.025, 10), dark);
+  sightF.rotation.x = Math.PI / 2;
+  sightF.position.set(0, 0.074, -0.21);
+  sightF.userData.partRole = 'sight_front';
+
+  for (const m of [receiver, lower, barrel, muzzle, mag, handle, vGrip, stock, sightR, sightF]) {
+    m.castShadow = true;
+    g.add(m);
+  }
+  return g;
+}
+
+function buildMk48Mesh() {
+  const g = new THREE.Group();
+  const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.105, 0.14, 0.46), dark2);
+  receiver.position.set(0, 0.01, -0.02);
+  const topCover = new THREE.Mesh(new THREE.BoxGeometry(0.092, 0.045, 0.36), dark);
+  topCover.position.set(0, 0.095, -0.02);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.026, 0.48, 12), metal);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0, 0.022, -0.66);
+  const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.08, 10), dark);
+  muzzle.rotation.x = Math.PI / 2;
+  muzzle.position.set(0, 0.022, -0.91);
+  muzzle.userData.partRole = 'muzzle_default';
+  const ammoBox = new THREE.Mesh(new THREE.BoxGeometry(0.145, 0.17, 0.17), matG);
+  ammoBox.position.set(0.02, -0.13, -0.08);
+  ammoBox.userData.partRole = 'magazine_default';
+  const beltGuide = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.055, 0.12), metal);
+  beltGuide.position.set(0.072, -0.015, -0.08);
+  beltGuide.rotation.z = -0.35;
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.16, 0.074), grip);
+  handle.position.set(0, -0.12, 0.14);
+  handle.rotation.x = -0.28;
+  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.072, 0.14, 0.28), dark2);
+  stock.position.set(0, -0.015, 0.34);
+  stock.userData.partRole = 'stock_default';
+  const bipodL = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.24, 8), dark);
+  bipodL.rotation.x = Math.PI / 2;
+  bipodL.position.set(-0.052, -0.045, -0.44);
+  const bipodR = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.24, 8), dark);
+  bipodR.rotation.x = Math.PI / 2;
+  bipodR.position.set(0.052, -0.045, -0.44);
+  const sightR = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.035, 0.03), dark);
+  sightR.position.set(0, 0.125, 0.10);
+  sightR.userData.partRole = 'optic_default';
+  const sightF = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.055, 0.022), dark);
+  sightF.position.set(0, 0.07, -0.74);
+  sightF.userData.partRole = 'sight_front';
+
+  for (const m of [receiver, topCover, barrel, muzzle, ammoBox, beltGuide, handle, stock, bipodL, bipodR, sightR, sightF]) {
+    m.castShadow = true;
+    g.add(m);
+  }
+  return g;
+}
+
+function buildAwm338Mesh() {
+  const g = new THREE.Group();
+  const chassis = new THREE.Mesh(new THREE.BoxGeometry(0.068, 0.105, 0.58), matG);
+  chassis.position.set(0, 0, -0.02);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.024, 0.72, 12), metal);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0, 0.024, -0.62);
+  const muzzle = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.04, 0.11), dark);
+  muzzle.position.set(0, 0.024, -0.98);
+  muzzle.userData.partRole = 'muzzle_default';
+  const mag = new THREE.Mesh(new THREE.BoxGeometry(0.046, 0.10, 0.12), dark);
+  mag.position.set(0, -0.088, -0.09);
+  mag.userData.partRole = 'magazine_default';
+  const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.065, 8), metal);
+  bolt.rotation.z = Math.PI / 2;
+  bolt.position.set(0.045, 0.02, 0.05);
+  const boltKnob = new THREE.Mesh(new THREE.SphereGeometry(0.015, 8, 8), dark);
+  boltKnob.position.set(0.075, 0.02, 0.05);
+  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.058, 0.052, 0.30), matG);
+  stock.position.set(0, 0.02, 0.38);
+  stock.userData.partRole = 'stock_default';
+  const cheek = new THREE.Mesh(new THREE.BoxGeometry(0.054, 0.028, 0.14), dark);
+  cheek.position.set(0, 0.06, 0.41);
+  const butt = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.036), grip);
+  butt.position.set(0, -0.015, 0.53);
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.046, 0.13, 0.065), grip);
+  handle.position.set(0, -0.06, 0.22);
+  handle.rotation.x = -0.32;
+  const scopeTube = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.34, 12), dark);
+  scopeTube.rotation.x = Math.PI / 2;
+  scopeTube.position.set(0, 0.106, -0.04);
+  scopeTube.userData.partRole = 'optic_default';
+  const scopeBell = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.024, 0.12, 12), dark);
+  scopeBell.rotation.x = Math.PI / 2;
+  scopeBell.position.set(0, 0.106, -0.23);
+  scopeBell.userData.partRole = 'optic_default';
+  const scopeOcular = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.030, 0.09, 12), dark);
+  scopeOcular.rotation.x = Math.PI / 2;
+  scopeOcular.position.set(0, 0.106, 0.14);
+  scopeOcular.userData.partRole = 'optic_default';
+  const mountF = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.055, 0.032), metal);
+  mountF.position.set(0, 0.072, -0.12);
+  mountF.userData.partRole = 'optic_default';
+  const mountR = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.055, 0.032), metal);
+  mountR.position.set(0, 0.072, 0.04);
+  mountR.userData.partRole = 'optic_default';
+
+  for (const m of [chassis, barrel, muzzle, mag, bolt, boltKnob, stock, cheek, butt, handle, scopeTube, scopeBell, scopeOcular, mountF, mountR]) {
+    m.castShadow = true;
+    g.add(m);
+  }
+  return g;
+}
+
+function buildKnifeMesh() {
+  const g = new THREE.Group();
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.046, 0.22), metal);
+  blade.position.set(0, 0.008, -0.09);
+  const tip = new THREE.Mesh(new THREE.BoxGeometry(0.010, 0.034, 0.075), metal);
+  tip.position.set(0, 0.002, -0.21);
+  tip.rotation.x = 0.24;
+  const serr = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.012, 0.18), dark);
+  serr.position.set(0, -0.016, -0.09);
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.092, 0.024), dark);
+  guard.position.set(0, 0.004, 0.02);
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.030, 0.042, 0.14), grip);
+  handle.position.set(0, 0.002, 0.10);
+  const pommel = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.024, 0.03, 10), dark);
+  pommel.rotation.x = Math.PI / 2;
+  pommel.position.set(0, 0.002, 0.18);
+
+  for (const m of [blade, tip, serr, guard, handle, pommel]) {
     m.castShadow = true;
     g.add(m);
   }
@@ -300,6 +522,176 @@ export const WEAPONS = {
       reload: sfxReloadPistol
     },
     buildMesh: buildP12Mesh
+  },
+  ak12: {
+    id: 'ak12',
+    name: 'AK-12 TACTICAL',
+    category: 'ASSAULT',
+    damage: 38,
+    pellets: 1,
+    fireRate: 0.092,
+    fireMode: 'auto',
+    magSize: 30,
+    reserveDefault: 120,
+    reserveSnd: 150,
+    reloadType: 'magazine',
+    reloadTime: 2.1,
+    shellReload: null,
+    dropoff: { optimal: 18, max: 45, minMult: 0.55 },
+    spreadHip: 0.013,
+    spreadAds: 0.0020,
+    recoilSpreadHip: 0.0038,
+    recoilSpreadAds: 0.0013,
+    recoilKick: 1.25,
+    recoilMax: 6.8,
+    recoilRecovery: 8.5,
+    mobilityMultiplier: 0.98,
+    adsSpeed: 11.5,
+    hipPos: new THREE.Vector3(0.28, -0.26, -0.55),
+    adsPos: new THREE.Vector3(0, -0.086, -0.42),
+    muzzlePos: new THREE.Vector3(0, 0.015, -0.87),
+    audio: {
+      shot: sfxShotAk12,
+      reload: sfxReloadAk12
+    },
+    buildMesh: buildAk12Mesh
+  },
+  mp5k: {
+    id: 'mp5k',
+    name: 'MP-5K',
+    category: 'SMG',
+    slot: 'secondary',
+    damage: 26,
+    pellets: 1,
+    fireRate: 0.075,
+    fireMode: 'auto',
+    magSize: 25,
+    reserveDefault: 125,
+    reserveSnd: 150,
+    reloadType: 'magazine',
+    reloadTime: 1.25,
+    shellReload: null,
+    dropoff: { optimal: 12, max: 28, minMult: 0.42 },
+    spreadHip: 0.014,
+    spreadAds: 0.0030,
+    recoilSpreadHip: 0.0036,
+    recoilSpreadAds: 0.0013,
+    recoilKick: 0.70,
+    recoilMax: 4.6,
+    recoilRecovery: 13.0,
+    mobilityMultiplier: 1.10,
+    adsSpeed: 17.0,
+    hipPos: new THREE.Vector3(0.25, -0.25, -0.48),
+    adsPos: new THREE.Vector3(0, -0.078, -0.36),
+    muzzlePos: new THREE.Vector3(0, 0.024, -0.45),
+    audio: {
+      shot: sfxShotMp5k,
+      reload: sfxReloadMp5k
+    },
+    buildMesh: buildMp5kMesh
+  },
+  mk48: {
+    id: 'mk48',
+    name: 'MK-48 HEAVY',
+    category: 'LMG',
+    damage: 42,
+    pellets: 1,
+    fireRate: 0.12,
+    fireMode: 'auto',
+    magSize: 100,
+    reserveDefault: 200,
+    reserveSnd: 200,
+    reloadType: 'magazine',
+    reloadTime: 4.4,
+    shellReload: null,
+    dropoff: { optimal: 24, max: 60, minMult: 0.65 },
+    spreadHip: 0.022,
+    spreadAds: 0.0028,
+    recoilSpreadHip: 0.0045,
+    recoilSpreadAds: 0.0018,
+    recoilKick: 1.6,
+    recoilMax: 8.5,
+    recoilRecovery: 6.5,
+    mobilityMultiplier: 0.88,
+    adsSpeed: 8.0,
+    hipPos: new THREE.Vector3(0.30, -0.28, -0.58),
+    adsPos: new THREE.Vector3(0, -0.116, -0.46),
+    muzzlePos: new THREE.Vector3(0, 0.022, -0.92),
+    audio: {
+      shot: sfxShotMk48,
+      reload: sfxReloadMk48
+    },
+    buildMesh: buildMk48Mesh
+  },
+  awm338: {
+    id: 'awm338',
+    name: 'AWM-338',
+    category: 'SNIPER',
+    damage: 135,
+    pellets: 1,
+    fireRate: 1.428,
+    fireMode: 'bolt',
+    magSize: 5,
+    reserveDefault: 20,
+    reserveSnd: 25,
+    reloadType: 'magazine',
+    reloadTime: 2.8,
+    shellReload: null,
+    dropoff: { optimal: 40, max: 120, minMult: 0.85 },
+    spreadHip: 0.038,
+    spreadAds: 0.0005,
+    recoilSpreadHip: 0.0060,
+    recoilSpreadAds: 0.0008,
+    recoilKick: 5.5,
+    recoilMax: 10.0,
+    recoilRecovery: 5.0,
+    mobilityMultiplier: 0.90,
+    adsSpeed: 8.5,
+    adsZoomOffset: 45,
+    hipPos: new THREE.Vector3(0.28, -0.26, -0.60),
+    adsPos: new THREE.Vector3(0, -0.106, -0.44),
+    muzzlePos: new THREE.Vector3(0, 0.024, -1.02),
+    audio: {
+      shot: sfxShotAwm,
+      bolt: sfxBoltAction,
+      reload: sfxReloadAwm
+    },
+    buildMesh: buildAwm338Mesh
+  },
+  knife: {
+    id: 'knife',
+    name: 'CUCHILLO TÁCTICO',
+    category: 'MELEE',
+    slot: 'secondary',
+    damage: 105,
+    pellets: 1,
+    fireRate: 0.60,
+    fireMode: 'melee',
+    magSize: 0,
+    reserveDefault: 0,
+    reserveSnd: 0,
+    reloadType: 'none',
+    reloadTime: 0,
+    shellReload: null,
+    dropoff: null,
+    spreadHip: 0,
+    spreadAds: 0,
+    recoilSpreadHip: 0,
+    recoilSpreadAds: 0,
+    recoilKick: 0,
+    recoilMax: 0,
+    recoilRecovery: 20,
+    mobilityMultiplier: 1.15,
+    adsSpeed: 20.0,
+    adsZoomOffset: 0,
+    hipPos: new THREE.Vector3(0.24, -0.22, -0.42),
+    adsPos: new THREE.Vector3(0.08, -0.16, -0.36),
+    muzzlePos: new THREE.Vector3(0, 0, -0.40),
+    audio: {
+      slash: sfxKnifeSlash,
+      hit: sfxKnifeHit
+    },
+    buildMesh: buildKnifeMesh
   }
 };
 
@@ -383,6 +775,11 @@ export function setWeapon(id, options = {}) {
     weapon.reloading = false;
     weapon.reloadT = 0;
     weapon.reloadStage = 'idle';
+    weapon.boltCycling = false;
+    weapon.boltT = 0;
+    weapon.boltDuration = def.boltDuration || 0.85;
+    weapon.meleeStage = 'idle';
+    weapon.meleeT = 0;
   }
   weapon.reserveDefault = resolved.reserveDefault;
   weapon.reserveSnd = resolved.reserveSnd;
@@ -452,7 +849,7 @@ export function getDamageWithDropoff(wpn, dist, isHeadshot) {
       mult = 1.0 - t * (1.0 - d.minMult);
     }
   }
-  const headMult = (wpn.id === 'm870' || wpn.id === 'p12') ? 1.5 : 2.2;
+  const headMult = (wpn.id === 'm870' || wpn.id === 'p12' || wpn.id === 'knife') ? 1.5 : (wpn.id === 'awm338' ? 2.5 : 2.2);
   const base = wpn.damage * mult;
   return isHeadshot ? base * headMult : base;
 }
@@ -517,6 +914,98 @@ export function buildLobbyWeaponMesh(id, attachments = null) {
     const handle = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.13, 0.065), matV);
     handle.position.set(0, -0.07, -0.03);
     handle.rotation.x = -0.25;
+    handle.castShadow = true;
+    grp.add(handle);
+  } else if (id === 'ak12') {
+    const rec = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.13, 0.48), matG);
+    rec.castShadow = true;
+    grp.add(rec);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.48, 10), matM);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, 0.015, 0.48);
+    barrel.castShadow = true;
+    grp.add(barrel);
+    const mag = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.22, 0.10), matG);
+    mag.position.set(0, -0.14, 0.08);
+    mag.rotation.x = -0.22;
+    mag.castShadow = true;
+    mag.userData.partRole = 'magazine_default';
+    grp.add(mag);
+    const stock = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.11, 0.26), matV);
+    stock.position.set(0, -0.01, -0.30);
+    stock.castShadow = true;
+    stock.userData.partRole = 'stock_default';
+    grp.add(stock);
+  } else if (id === 'mp5k') {
+    const rec = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.28, 10), matG);
+    rec.rotation.x = Math.PI / 2;
+    rec.castShadow = true;
+    grp.add(rec);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.16, 8), matM);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, 0.01, 0.22);
+    barrel.castShadow = true;
+    grp.add(barrel);
+    const mag = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.20, 0.065), matG);
+    mag.position.set(0, -0.14, 0.06);
+    mag.rotation.x = 0.14;
+    mag.castShadow = true;
+    mag.userData.partRole = 'magazine_default';
+    grp.add(mag);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.13, 0.06), matV);
+    handle.position.set(0, -0.08, -0.06);
+    handle.rotation.x = -0.26;
+    handle.castShadow = true;
+    grp.add(handle);
+  } else if (id === 'mk48') {
+    const rec = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.14, 0.46), matG);
+    rec.castShadow = true;
+    grp.add(rec);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.50, 10), matM);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, 0.02, 0.50);
+    barrel.castShadow = true;
+    grp.add(barrel);
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.16), matG);
+    box.position.set(0.02, -0.13, 0.06);
+    box.castShadow = true;
+    box.userData.partRole = 'magazine_default';
+    grp.add(box);
+    const stock = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.13, 0.28), matV);
+    stock.position.set(0, -0.01, -0.32);
+    stock.castShadow = true;
+    stock.userData.partRole = 'stock_default';
+    grp.add(stock);
+  } else if (id === 'awm338') {
+    const rec = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.11, 0.56), matG);
+    rec.castShadow = true;
+    grp.add(rec);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.70, 10), matM);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, 0.02, 0.62);
+    barrel.castShadow = true;
+    grp.add(barrel);
+    const scope = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.32, 10), matM);
+    scope.rotation.x = Math.PI / 2;
+    scope.position.set(0, 0.10, 0.06);
+    scope.castShadow = true;
+    scope.userData.partRole = 'optic_default';
+    grp.add(scope);
+    const stock = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.12, 0.32), matV);
+    stock.position.set(0, 0, -0.38);
+    stock.castShadow = true;
+    stock.userData.partRole = 'stock_default';
+    grp.add(stock);
+  } else if (id === 'knife') {
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.045, 0.24), matM);
+    blade.position.set(0, 0, 0.12);
+    blade.castShadow = true;
+    grp.add(blade);
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.08, 0.02), matG);
+    guard.castShadow = true;
+    grp.add(guard);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.04, 0.14), matV);
+    handle.position.set(0, 0, -0.08);
     handle.castShadow = true;
     grp.add(handle);
   } else {

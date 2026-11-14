@@ -69,7 +69,7 @@ export const WEAPON_CATALOG = [
     category: 'ASSAULT',
     desc: 'Fusil de asalto 5.45x39mm con alta pegada balística y retroceso sostenido.',
     reqLevel: 14,
-    implementation: 'PLANNED',
+    implementation: 'IMPLEMENTED',
     maxLevel: 20
   },
   {
@@ -87,7 +87,7 @@ export const WEAPON_CATALOG = [
     category: 'SMG',
     desc: 'Arma de defensa personal de 9mm con retroceso dócil y alta maniobrabilidad.',
     reqLevel: 20,
-    implementation: 'PLANNED',
+    implementation: 'IMPLEMENTED',
     maxLevel: 20
   },
   {
@@ -105,7 +105,7 @@ export const WEAPON_CATALOG = [
     category: 'LMG',
     desc: 'Ametralladora ligera 7.62x51mm de supresión con cinta de 100 cartuchos.',
     reqLevel: 24,
-    implementation: 'PLANNED',
+    implementation: 'IMPLEMENTED',
     maxLevel: 20
   },
   {
@@ -114,7 +114,7 @@ export const WEAPON_CATALOG = [
     category: 'SNIPER',
     desc: 'Fusil de cerrojo calibre .338 Lapua Magnum para eliminación a larga distancia.',
     reqLevel: 30,
-    implementation: 'PLANNED',
+    implementation: 'IMPLEMENTED',
     maxLevel: 20
   },
   {
@@ -132,7 +132,7 @@ export const WEAPON_CATALOG = [
     category: 'MELEE',
     desc: 'Hoja fija de combate de acero endurecido para neutralización silenciosa.',
     reqLevel: 1,
-    implementation: 'PLANNED',
+    implementation: 'IMPLEMENTED',
     maxLevel: 20
   }
 ];
@@ -317,9 +317,14 @@ function createDefaultState(playerLevel = 1) {
     },
     weapons: {
       mk7: { xp: 0 },
+      ak12: { xp: 0 },
       vector9: { xp: 0 },
+      mp5k: { xp: 0 },
       m870: { xp: 0 },
-      p12: { xp: 0 }
+      mk48: { xp: 0 },
+      awm338: { xp: 0 },
+      p12: { xp: 0 },
+      knife: { xp: 0 }
     },
     selectedWeapon: 'mk7',
     selectedLoadoutId: 'loadout_1',
@@ -368,11 +373,11 @@ function validateAndNormalizeState(raw) {
       let primary = (typeof l?.primary === 'string' && isWeaponUnlocked(l.primary, playerInfo.level))
         ? l.primary
         : 'mk7';
-      if (primary === 'p12') primary = 'mk7';
+      if (primary === 'p12' || primary === 'knife') primary = 'mk7';
       let secondary = (typeof l?.secondary === 'string' && isWeaponUnlocked(l.secondary, playerInfo.level))
         ? l.secondary
         : (p12Unlocked ? 'p12' : null);
-      if (secondary && secondary !== 'p12') secondary = null;
+      if (secondary && secondary !== 'p12' && secondary !== 'knife' && secondary !== 'mp5k') secondary = null;
       return {
         id: stableId,
         name,
@@ -636,7 +641,7 @@ export class ProgressionManager {
     const pInfo = this.getPlayerInfo();
     if (!isWeaponUnlocked(weaponId, pInfo.level)) return false;
     const cat = WEAPON_CATALOG.find(w => w.id === weaponId);
-    if (!cat || (cat.category !== 'PISTOL' && cat.category !== 'MELEE')) return false;
+    if (!cat || (cat.category !== 'PISTOL' && cat.category !== 'MELEE' && cat.id !== 'mp5k')) return false;
     target.secondary = weaponId;
     target.updatedAt = Date.now();
     this.save();
@@ -671,10 +676,12 @@ export class ProgressionManager {
     const pInfo = this.getPlayerInfo();
 
     let primary = (typeof src.primary === 'string' && isWeaponUnlocked(src.primary, pInfo.level)) ? src.primary : 'mk7';
-    if (primary === 'p12') primary = 'mk7';
+    if (primary === 'p12' || primary === 'knife') primary = 'mk7';
     let secondary = null;
     if (src.secondary && isWeaponUnlocked(src.secondary, pInfo.level)) {
-      secondary = src.secondary;
+      if (src.secondary === 'p12' || src.secondary === 'knife' || src.secondary === 'mp5k') {
+        secondary = src.secondary;
+      }
     }
 
     const cloned = normalizeLoadoutWeaponAttachments(cloneWeaponAttachmentMaps(src.weaponAttachments), this.state.weapons);

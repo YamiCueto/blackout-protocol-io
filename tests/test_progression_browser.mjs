@@ -84,8 +84,8 @@ try {
     await b.sleep(150);
     const mp5Btn = await b.evaluate(`document.getElementById('btn-equip-weapon').textContent`);
     const mp5Disabled = await b.evaluate(`document.getElementById('btn-equip-weapon').disabled`);
-    if (mp5Btn !== 'EN DESARROLLO') throw new Error(`Expected EN DESARROLLO for planned weapon, got ${mp5Btn}`);
-    if (!mp5Disabled) throw new Error('Planned weapon button must be disabled');
+    if (mp5Btn !== 'BLOQUEADA') throw new Error(`Expected BLOQUEADA for locked weapon, got ${mp5Btn}`);
+    if (!mp5Disabled) throw new Error('Locked weapon button must be disabled');
 
     return { activeCat, weaponName, btnText, statusHint, mp5Btn };
   });
