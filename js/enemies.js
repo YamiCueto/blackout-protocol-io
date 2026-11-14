@@ -1,11 +1,19 @@
-/* Enemigos: modelo, daño y línea de visión. La IA de movimiento vive en main.js. */
 import * as THREE from 'three';
 import { scene } from './core.js';
 import { solidMeshes } from './world.js';
 import { spawnBurst, spawnDebris } from './effects.js';
 import { sfxHit, sfxClick } from './audio.js';
+import { ARCHETYPES, EnemyAIBrain } from './enemy-ai.js';
+
+let globalNavProvider = null;
+let globalPerceptionProvider = null;
 
 export const enemies = [];
+
+export function setAISystems(nav, perc) {
+  globalNavProvider = nav;
+  globalPerceptionProvider = perc;
+}
 
 const bodyMatE = new THREE.MeshStandardMaterial({ color: 0x3d4435, roughness: 0.8 });
 const vestMatE = new THREE.MeshStandardMaterial({ color: 0x23261f, roughness: 0.9 });
@@ -21,60 +29,116 @@ const geoVisor = new THREE.BoxGeometry(0.26, 0.07, 0.02);
 const geoLeg = new THREE.BoxGeometry(0.22, 0.8, 0.24);
 const geoArm = new THREE.BoxGeometry(0.16, 0.6, 0.2);
 const geoGun = new THREE.BoxGeometry(0.07, 0.1, 0.65);
+const geoHeavyPlate = new THREE.BoxGeometry(0.72, 0.55, 0.46);
+const geoSniperBarrel = new THREE.BoxGeometry(0.05, 0.05, 0.4);
 
 export const CORPSE_LIFETIME = 8;
 const CORPSE_SINK_TIME = 1.2;
 
-export function makeEnemy(x, z) {
+export function makeEnemy(x, z, archetypeKey = 'SHOOTER') {
   const g = new THREE.Group();
-  const torso = new THREE.Mesh(geoTorso, bodyMatE); torso.position.y = 1.18;
+  const archDef = ARCHETYPES[archetypeKey] || ARCHETYPES.SHOOTER;
+
+  const archBodyMat = bodyMatE.clone();
+  archBodyMat.color.setHex(archDef.color || 0x3d4435);
+
+  const archVisorMat = visorMatE.clone();
+  archVisorMat.emissive.setHex(archDef.visorColor || 0xaa2211);
+
+  const torso = new THREE.Mesh(geoTorso, archBodyMat); torso.position.y = 1.18;
   const vest = new THREE.Mesh(geoVest, vestMatE); vest.position.y = 1.25;
   const head = new THREE.Mesh(geoHead, headMatE); head.position.y = 1.78;
   head.userData.head = true;
   const helmet = new THREE.Mesh(geoHelmet, vestMatE); helmet.position.y = 1.91;
   helmet.userData.head = true;
-  const visor = new THREE.Mesh(geoVisor, visorMatE); visor.position.set(0, 1.8, -0.16);
+  const visor = new THREE.Mesh(geoVisor, archVisorMat); visor.position.set(0, 1.8, -0.16);
   visor.userData.head = true;
   const legL = new THREE.Mesh(geoLeg, vestMatE); legL.position.set(-0.16, 0.4, 0);
   const legR = legL.clone(); legR.position.x = 0.16;
-  const armL = new THREE.Mesh(geoArm, bodyMatE); armL.position.set(-0.42, 1.2, -0.1); armL.rotation.x = -0.6;
+  const armL = new THREE.Mesh(geoArm, archBodyMat); armL.position.set(-0.42, 1.2, -0.1); armL.rotation.x = -0.6;
   const armR = armL.clone(); armR.position.x = 0.42;
   const gun = new THREE.Mesh(geoGun, gunMatE); gun.position.set(0.12, 1.25, -0.42);
-  for (const m of [torso, vest, head, helmet, visor, legL, legR, armL, armR, gun]) {
-    m.castShadow = true; g.add(m);
+
+  const parts = [torso, vest, head, helmet, visor, legL, legR, armL, armR, gun];
+
+  if (archDef.id === 'brute') {
+    const heavyPlate = new THREE.Mesh(geoHeavyPlate, vestMatE);
+    heavyPlate.position.y = 1.25;
+    parts.push(heavyPlate);
+  } else if (archDef.id === 'elite') {
+    const sniperExt = new THREE.Mesh(geoSniperBarrel, gunMatE);
+    sniperExt.position.set(0.12, 1.25, -0.85);
+    parts.push(sniperExt);
   }
+
+  for (const m of parts) {
+    m.castShadow = true;
+    g.add(m);
+  }
+
+  if (archDef.scale && archDef.scale !== 1.0) {
+    g.scale.setScalar(archDef.scale);
+  }
+
   g.position.set(x, 0, z);
+
   const enemy = {
-    group: g, alive: true, hp: 100,
-    speed: 2.4 + Math.random() * 1.2,
+    group: g,
+    alive: true,
+    hp: archDef.hpBase,
+    speed: archDef.speed,
+    archetype: archDef,
     fireTimer: 1 + Math.random() * 2,
     strafeDir: Math.random() < 0.5 ? 1 : -1,
     strafeTimer: 1 + Math.random() * 2,
-    legL, legR, walkPhase: Math.random() * 6,
-    deathT: 0, corpseT: 0,
+    legL,
+    legR,
+    walkPhase: Math.random() * 6,
+    deathT: 0,
+    corpseT: 0,
+    brain: null,
+    defusing: false
   };
+
+  if (globalNavProvider && globalPerceptionProvider) {
+    enemy.brain = new EnemyAIBrain(enemy, archDef, globalNavProvider, globalPerceptionProvider);
+  }
+
   g.traverse(o => { o.userData.enemy = enemy; });
   scene.add(g);
   enemies.push(enemy);
   return enemy;
 }
 
-/* Devuelve true si el impacto lo mata. `impulse` es la dirección de la bala. */
 export function damageEnemy(e, dmg, point, headshot = false, impulse = null) {
   if (!e.alive) return false;
-  e.hp -= dmg;
+  const effectiveDmg = e.archetype && e.archetype.resistanceMult ? dmg * e.archetype.resistanceMult : dmg;
+  e.hp -= effectiveDmg;
   spawnBurst(point, 0xc22222, headshot ? 14 : 9, 2.6, 0.09, 0.45, -5);
   sfxHit();
+
+  if (e.brain && e.brain.state !== 'DEAD') {
+    if (e.hp < 45 && e.brain.archetype.usesCover) {
+      e.brain.setState('TAKE_COVER', true);
+    } else if (e.brain.state === 'PATROL' || e.brain.state === 'SEARCH' || e.brain.state === 'INVESTIGATE') {
+      e.brain.setState('ALERT', true);
+    }
+  }
+
   if (e.hp <= 0) {
-    e.alive = false; e.deathT = 0;
+    e.alive = false;
+    e.defusing = false;
+    e.deathT = 0;
     e.deathHeadshot = headshot;
+    if (e.brain) {
+      e.brain.setState('DEAD', true);
+    }
     if (headshot) popHead(e, impulse);
     return true;
   }
   return false;
 }
 
-/* Headshot letal: la cabeza, el casco y el visor salen despedidos con física. */
 function popHead(e, impulse) {
   const parts = [];
   e.group.traverse(o => { if (o.isMesh && o.userData.head) parts.push(o); });
@@ -87,10 +151,9 @@ function popHead(e, impulse) {
     const ang = new THREE.Vector3((Math.random() - .5) * 16, (Math.random() - .5) * 16, (Math.random() - .5) * 16);
     spawnDebris(m, v, ang, 2.6 + Math.random());
   }
-  // erupción de sangre en el cuello
   spawnBurst(neckPos, 0xb01414, 22, 3.8, 0.12, 0.7, -7);
   spawnBurst(neckPos, 0x7a0c0c, 10, 1.6, 0.16, 1.0, -5);
-  sfxClick(170, 0.26, 0.09); // golpe sordo
+  sfxClick(170, 0.26, 0.09);
 }
 
 const raycaster = new THREE.Raycaster();
@@ -109,6 +172,9 @@ function releaseEnemy(e) {
   scene.remove(e.group);
   e.group.traverse(o => { o.userData.enemy = null; });
   e.removed = true;
+  if (e.brain) {
+    e.brain.setState('DEAD', true);
+  }
 }
 
 export function updateCorpses(dt) {

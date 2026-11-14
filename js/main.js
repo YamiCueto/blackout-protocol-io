@@ -5,7 +5,11 @@ import { audio, applyVolume, sfxShot, sfxClick, sfxReload, sfxHurt, sfxEnemyShot
 import { ARENA, moon, pushOutCircle, pointBlocked, solidMeshes } from './world.js';
 import { spawnTracer, spawnBurst, spawnDecal, updateEffects, resetEffects } from './effects.js';
 import { weapon, gunGroup, muzzleFlash, flashSprite, GUN_HIP, GUN_ADS, setWeapon, WEAPONS, getDamageWithDropoff, weaponMeshSubGroup } from './weapon.js';
-import { enemies, makeEnemy, damageEnemy, enemyLOS, clearEnemies, updateCorpses } from './enemies.js';
+import { enemies, makeEnemy, damageEnemy, enemyLOS, clearEnemies, updateCorpses, setAISystems } from './enemies.js';
+import { SpatialNavigation } from './spatial-nav.js';
+import { PerceptionSystem } from './perception.js';
+import { EnemyAIBrain, ARCHETYPES, AI_STATES } from './enemy-ai.js';
+import { colliders } from './world.js';
 import { createDiagnostics } from './diagnostics.js';
 import {
   lobbyScene,
@@ -63,6 +67,19 @@ import {
   SHARED_DROP_GEOMETRIES
 } from './drop-visuals.js';
 import { updateViewModel, recordMouseDelta, triggerFireImpulse, resetViewModelState, getViewModelState, armsRig } from './viewmodel-animator.js';
+
+const spatialNav = new SpatialNavigation({
+  arenaHalfSize: ARENA,
+  agentRadius: 0.55,
+  colliders: colliders
+});
+
+const perception = new PerceptionSystem({
+  colliders: colliders,
+  solidMeshesProvider: () => solidMeshes()
+});
+
+setAISystems(spatialNav, perception);
 
 /* ---------------- Ajustes: aplicación y UI ---------------- */
 function applySettings() {
@@ -1770,6 +1787,7 @@ function shoot() {
   weapon.recoil = Math.min(weapon.recoil + (weapon.recoilKick || 1.0), weapon.recoilMax || 6.0);
   flashTimer = 0.045;
   triggerFireImpulse(weapon.id, weapon.category);
+  perception.broadcastSound('shot', player.pos, !!weapon.audioSuppressed);
   const audioOpts = weapon.audioSuppressed ? { suppressed: true } : undefined;
   if (weapon.audio && weapon.audio.shot) {
     weapon.audio.shot(audioOpts);
@@ -1965,6 +1983,30 @@ function removeBomb() {
   bombGroup = null; bombLight = null;
 }
 
+function pickWaveArchetype(waveNum, enemyIdx) {
+  if (waveNum <= 2) {
+    return enemyIdx % 3 === 0 ? 'CHASER' : 'SHOOTER';
+  } else if (waveNum <= 4) {
+    const r = (waveNum + enemyIdx) % 4;
+    if (r === 0) return 'CHASER';
+    if (r === 1) return 'FLANKER';
+    return 'SHOOTER';
+  } else if (waveNum <= 7) {
+    const r = (waveNum * 2 + enemyIdx) % 5;
+    if (r === 0) return 'CHASER';
+    if (r === 1) return 'FLANKER';
+    if (r === 2) return 'BRUTE';
+    return 'SHOOTER';
+  } else {
+    const r = (waveNum * 3 + enemyIdx) % 6;
+    if (r === 0) return 'CHASER';
+    if (r === 1) return 'FLANKER';
+    if (r === 2) return 'BRUTE';
+    if (r === 3) return 'ELITE';
+    return 'SHOOTER';
+  }
+}
+
 function spawnSndEnemy() {
   let x, z, tries = 0;
   do {
@@ -1976,10 +2018,23 @@ function spawnSndEnemy() {
     else { x = ARENA - 4; z = t; }
     tries++;
   } while ((pointBlocked(x, z, 0.8) || player.pos.distanceTo(new THREE.Vector3(x, 0, z)) < 16) && tries < 24);
-  const e = makeEnemy(x, z);
-  const elapsed = matchTime - snd.startT;
-  e.hp = 100 + elapsed * 0.8;
-  e.speed += Math.min(elapsed * 0.02, 1.2);
+
+  const sndArchs = ['SHOOTER', 'FLANKER', 'BRUTE', 'ELITE'];
+  const archKey = sndArchs[(snd ? snd.spawned : 0) % sndArchs.length];
+  const e = makeEnemy(x, z, archKey);
+  const elapsed = snd ? matchTime - snd.startT : 0;
+  e.hp = e.archetype.hpBase + elapsed * 0.8;
+  e.speed = e.archetype.speed + Math.min(elapsed * 0.02, 1.2);
+
+  const hasDefuser = enemies.some(other => other.alive && other.sndRole === 'defuser');
+  e.sndRole = hasDefuser ? 'escort' : 'defuser';
+
+  e.brain = new EnemyAIBrain(e, e.archetype, spatialNav, perception);
+  if (e.sndRole === 'defuser') {
+    e.brain.setState('CHASE', true);
+  } else {
+    e.brain.setState('ALERT', true);
+  }
 }
 
 function fmtTime(s) {
@@ -2021,9 +2076,12 @@ function spawnWave() {
       else { x = ARENA - 4; z = t; }
       tries++;
     } while ((pointBlocked(x, z, 0.8) || player.pos.distanceTo(new THREE.Vector3(x, 0, z)) < 20) && tries < 24);
-    const e = makeEnemy(x, z);
-    e.hp = 100 + (wave - 1) * 12;
-    e.speed += Math.min(wave * 0.12, 1.4);
+
+    const archKey = pickWaveArchetype(wave, i);
+    const e = makeEnemy(x, z, archKey);
+    e.hp = e.archetype.hpBase + (wave - 1) * 12;
+    e.speed = e.archetype.speed + Math.min(wave * 0.12, 1.4);
+    e.brain.setState('PATROL', true);
   }
   betweenWaves = false;
 }
@@ -2623,20 +2681,19 @@ function stepSim(dt) {
     }
 
     /* --- enemigos --- */
+    perception.update(matchTime);
     let anyAlive = false;
-    for (const e of enemies) {
+    for (let enemyIdx = 0; enemyIdx < enemies.length; enemyIdx++) {
+      const e = enemies[enemyIdx];
       if (!e.alive) {
-        // animación de muerte
         if (e.deathT < 1) {
           e.deathT += dt * (e.deathHeadshot ? 2.8 : 2.2);
           const t = Math.min(1, e.deathT);
           if (e.deathHeadshot) {
-            // headshot: se desploma de espaldas con un giro seco
             e.group.rotation.x = Math.PI / 2 * (t * t);
             e.group.rotation.y += dt * 3.5 * (1 - t);
             e.group.position.y = -0.15 * t;
           } else {
-            // muerte normal: cae de bruces
             e.group.rotation.x = -Math.PI / 2 * t;
             e.group.position.y = -0.1 * t;
           }
@@ -2644,64 +2701,49 @@ function stepSim(dt) {
         continue;
       }
       anyAlive = true;
-      const toP = player.pos.clone().sub(e.group.position); toP.y = 0;
-      const dist = toP.length();
-      toP.normalize();
 
-      // objetivo de navegación: el jugador (oleadas) o la bomba (buscar y destruir)
+      if (!e.brain) {
+        e.brain = new EnemyAIBrain(e, e.archetype || ARCHETYPES.SHOOTER, spatialNav, perception);
+      }
+
       e.defusing = false;
-      let navDir = toP, retreat = dist < 6, strafeAmt = 0.6, advance = dist > 11;
-      if (gameMode === 'snd' && bombGroup) {
+      if (gameMode === 'snd' && bombGroup && e.sndRole === 'defuser') {
         const toB = bombPos.clone().sub(e.group.position); toB.y = 0;
         const distB = toB.length();
         if (distB < 2.3) {
-          // en la bomba: desactivar (quieto, indefenso mientras trabaja)
           e.defusing = true;
           e.group.rotation.y = Math.atan2(toB.x, toB.z);
           e.legL.rotation.x = e.legR.rotation.x = 0;
-        } else {
-          navDir = toB.normalize();
-          retreat = false; advance = true; strafeAmt = 0.3;
         }
       }
 
       if (!e.defusing) {
-        e.group.rotation.y = Math.atan2(navDir.x, navDir.z);
-        e.strafeTimer -= dt;
-        if (e.strafeTimer <= 0) { e.strafeDir *= -1; e.strafeTimer = 1.2 + Math.random() * 2; }
-        const move = new THREE.Vector3();
-        if (advance) move.add(navDir);
-        else if (retreat) move.sub(navDir);
-        move.add(new THREE.Vector3(-navDir.z, 0, navDir.x).multiplyScalar(e.strafeDir * strafeAmt));
-        move.normalize().multiplyScalar(e.speed * dt);
-        e.group.position.add(move);
-        // misma resolución de colisión que el jugador: nunca puede acabar dentro de un AABB
+        e.brain.update(dt, player, enemies, enemyIdx, gameMode, bombPos, matchTime);
         pushOutCircle(e.group.position, 0.5, 0.1, 1.9);
-
-        // animación piernas
-        e.walkPhase += dt * e.speed * 3.2;
-        e.legL.rotation.x = Math.sin(e.walkPhase) * 0.6;
-        e.legR.rotation.x = -Math.sin(e.walkPhase) * 0.6;
       }
 
-      // disparar (nunca mientras desactiva)
       e.fireTimer -= dt;
-      if (!e.defusing && e.fireTimer <= 0 && dist < 38) {
-        e.fireTimer = 0.9 + Math.random() * 1.6 - Math.min(wave * 0.04, 0.5);
-        if (enemyLOS(e, player.pos)) {
+      const canShootState = e.brain.state === AI_STATES.ATTACK || e.brain.state === AI_STATES.CHASE;
+      const toP = player.pos.clone().sub(e.group.position); toP.y = 0;
+      const dist = toP.length();
+
+      if (!e.defusing && canShootState && e.fireTimer <= 0 && dist < (e.archetype ? e.archetype.attackRange : 38)) {
+        const baseCd = e.archetype ? e.archetype.fireCooldown : 1.4;
+        e.fireTimer = baseCd * (0.8 + Math.random() * 0.4) - Math.min(wave * 0.03, 0.4);
+
+        if (perception.checkVision(e, player.pos, e.brain.state)) {
           sfxEnemyShot();
           const from = e.group.position.clone().add(new THREE.Vector3(0, 1.4, 0));
-          // error de puntería: crece con distancia y con el movimiento del jugador, baja con la dificultad
           const lvl = gameMode === 'snd' ? Math.min((matchTime - snd.startT) / 20, 4) : wave;
-          const err = Math.max(0.12,
-            0.30 + dist * 0.026 + (moving ? 0.45 : 0) + (sprint ? 0.35 : 0) - Math.min(lvl * 0.05, 0.45));
+          const archErrMod = e.archetype?.id === 'elite' ? -0.15 : (e.archetype?.id === 'brute' ? 0.12 : 0);
+          const err = Math.max(0.08,
+            0.26 + dist * 0.022 + (moving ? 0.40 : 0) + (sprint ? 0.30 : 0) + archErrMod - Math.min(lvl * 0.05, 0.45));
           const aim = new THREE.Vector3(
             player.pos.x + (Math.random() - .5) * 2 * err,
             player.pos.y - 0.5 + (Math.random() - .5) * 2 * err * 0.6,
             player.pos.z + (Math.random() - .5) * 2 * err);
           const dir = aim.sub(from).normalize();
 
-          // la bala es un raycast real: primero paredes, luego hitbox del jugador
           raycaster.set(from, dir);
           raycaster.far = 80;
           const wh = raycaster.intersectObjects(solidMeshes(), false);
@@ -2712,7 +2754,8 @@ function stepSim(dt) {
           if (hit && hit.dist < wallD) {
             spawnTracer(from, hit.point);
             spawnBurst(hit.point, 0xb01818, 6, 2.2, 0.08, 0.4, -4);
-            damagePlayer((7 + Math.random() * 6 + lvl) * hit.mult, e.group.position);
+            const baseDmg = e.archetype?.id === 'elite' ? 14 : (e.archetype?.id === 'chaser' ? 11 : 8);
+            damagePlayer((baseDmg + Math.random() * 5 + lvl) * hit.mult, e.group.position);
           } else if (wallD < Infinity) {
             const h = wh[0];
             spawnTracer(from, h.point);
@@ -3089,6 +3132,7 @@ window.__bp.checkMeleeHit = checkMeleeHit;
 window.__bp.enemies = enemies;
 window.__bp.makeEnemy = makeEnemy;
 window.__bp.clearEnemies = clearEnemies;
+window.__bp.damageEnemy = damageEnemy;
 window.__bp.player = player;
 window.__bp.setMouseDown = (v) => { mouseDown = v; };
 window.__bp.setAdsDown = (v) => { adsDown = v; };
@@ -3101,6 +3145,12 @@ window.__bp.armsRig = armsRig;
 window.__bp.triggerFireImpulse = triggerFireImpulse;
 window.__bp.resetViewModelState = resetViewModelState;
 window.__bp.weaponMeshSubGroup = weaponMeshSubGroup;
+window.__bp.spatialNav = spatialNav;
+window.__bp.perception = perception;
+window.__bp.AI_STATES = AI_STATES;
+window.__bp.ARCHETYPES = ARCHETYPES;
+window.__bp.getSndState = () => snd ? { timeLeft: snd.timeLeft, defuse: snd.defuse, ended: snd.ended, spawned: snd.spawned } : null;
+window.__bp.getPhase = () => phase;
 
 applySettings();
 refreshSettingsUI();
