@@ -172,6 +172,9 @@ try {
     await b.sleep(450);
 
     const res = await b.evaluate(`(() => {
+      let switchSafety = 0;
+      while (window.__bp.combatSession.switching && switchSafety++ < 50) window.__bp.stepSim(0.016);
+      const isSwitching = window.__bp.combatSession.switching;
       const weaponId = window.__bp.weapon.id;
       const activeSlot = window.__bp.combatSession.activeSlot;
       window.__bp.weapon.cooldown = 0;
@@ -192,6 +195,7 @@ try {
 
       window.__bp.backToMenu();
       return {
+        isSwitching,
         weaponId,
         activeSlot,
         ammoAfterFirst,
@@ -200,6 +204,7 @@ try {
         ammoAfterReleaseAndThird
       };
     })()`);
+    if (res.isSwitching) throw new Error('Weapon switch failed to complete within safety limit');
     if (res.weaponId !== 'p12' || res.activeSlot !== 'secondary') throw new Error(`Expected secondary p12 active, got ${res.activeSlot} ${res.weaponId}`);
     if (res.ammoAfterFirst !== 11) throw new Error(`Expected ammo 11 after first shot, got ${res.ammoAfterFirst}`);
     if (res.semiFiredFirst !== true) throw new Error(`Expected semiFired true, got ${res.semiFiredFirst}`);

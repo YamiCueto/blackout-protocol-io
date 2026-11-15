@@ -42,6 +42,22 @@ export function spawnDecal(point, normal) {
   if (decals.length > 60) { const old = decals.shift(); scene.remove(old); old.geometry.dispose(); old.material.dispose(); }
 }
 
+export function spawnSurfaceImpact(point, normal, surfaceType = 'concrete') {
+  if (surfaceType === 'metal') {
+    spawnBurst(point, 0xfff0aa, 10, 4.2, 0.08, 0.28, -4);
+    spawnDecal(point, normal);
+  } else if (surfaceType === 'wood') {
+    spawnBurst(point, 0xc49a45, 8, 2.8, 0.1, 0.35, -7);
+    spawnDecal(point, normal);
+  } else if (surfaceType === 'ground') {
+    spawnBurst(point, 0x5a544d, 7, 2.2, 0.12, 0.32, -9);
+    spawnDecal(point, normal);
+  } else {
+    spawnBurst(point, 0xd0c8b8, 8, 3.2, 0.09, 0.38, -8);
+    spawnDecal(point, normal);
+  }
+}
+
 /* Escombros con física simple: trozos que salen despedidos (p. ej. la cabeza en un headshot). */
 const debrisArr = [];
 

@@ -1,7 +1,7 @@
 /* Ajustes del usuario, persistidos en localStorage. Sin dependencias. */
 const SETTINGS_KEY = 'bp_settings';
 
-export const SETTINGS_DEFAULTS = { brightness: 100, fov: 75, shadows: 'high', volume: 80 };
+export const SETTINGS_DEFAULTS = { brightness: 100, fov: 75, shadows: 'high', volume: 80, reducedMotion: false };
 
 export const settings = { ...SETTINGS_DEFAULTS };
 try {

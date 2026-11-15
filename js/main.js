@@ -1,11 +1,15 @@
 import * as THREE from 'three';
 import { $, renderer, scene, camera } from './core.js';
 import { settings, SETTINGS_DEFAULTS, saveSettings } from './settings.js';
-import { audio, applyVolume, sfxShot, sfxClick, sfxReload, sfxHurt, sfxEnemyShot, sfxExplosion, sfxWeaponSwap, sfxPickup, sfxHeal, sfxStim, sfxBoltAction, sfxKnifeSlash, sfxKnifeHit } from './audio.js';
+import { audio, applyVolume, sfxShot, sfxClick, sfxReload, sfxHurt, sfxEnemyShot, sfxExplosion, sfxWeaponSwap, sfxPickup, sfxHeal, sfxStim, sfxBoltAction, sfxKnifeSlash, sfxKnifeHit, sfxHit } from './audio.js';
 import { ARENA, moon, pushOutCircle, pointBlocked, solidMeshes } from './world.js';
-import { spawnTracer, spawnBurst, spawnDecal, updateEffects, resetEffects } from './effects.js';
-import { weapon, gunGroup, muzzleFlash, flashSprite, GUN_HIP, GUN_ADS, setWeapon, WEAPONS, getDamageWithDropoff } from './weapon.js';
-import { enemies, makeEnemy, damageEnemy, enemyLOS, clearEnemies, updateCorpses } from './enemies.js';
+import { spawnTracer, spawnBurst, spawnDecal, spawnSurfaceImpact, updateEffects, resetEffects } from './effects.js';
+import { weapon, gunGroup, muzzleFlash, flashSprite, GUN_HIP, GUN_ADS, setWeapon, WEAPONS, getDamageWithDropoff, weaponMeshSubGroup } from './weapon.js';
+import { enemies, makeEnemy, damageEnemy, enemyLOS, clearEnemies, updateCorpses, setAISystems } from './enemies.js';
+import { SpatialNavigation } from './spatial-nav.js';
+import { PerceptionSystem } from './perception.js';
+import { EnemyAIBrain, ARCHETYPES, AI_STATES } from './enemy-ai.js';
+import { colliders } from './world.js';
 import { createDiagnostics } from './diagnostics.js';
 import {
   lobbyScene,
@@ -62,6 +66,20 @@ import {
   areSharedDropGeometriesIntact,
   SHARED_DROP_GEOMETRIES
 } from './drop-visuals.js';
+import { updateViewModel, recordMouseDelta, triggerFireImpulse, resetViewModelState, getViewModelState, armsRig } from './viewmodel-animator.js';
+
+const spatialNav = new SpatialNavigation({
+  arenaHalfSize: ARENA,
+  agentRadius: 0.55,
+  colliders: colliders
+});
+
+const perception = new PerceptionSystem({
+  colliders: colliders,
+  solidMeshesProvider: () => solidMeshes()
+});
+
+setAISystems(spatialNav, perception);
 
 /* ---------------- Ajustes: aplicación y UI ---------------- */
 function applySettings() {
@@ -85,6 +103,10 @@ function refreshSettingsUI() {
   $('set-shadows').value = settings.shadows;
   $('set-volume').value = settings.volume;
   $('val-volume').textContent = settings.volume + '%';
+  if ($('set-reduced-motion')) {
+    $('set-reduced-motion').checked = !!settings.reducedMotion;
+    $('val-reduced-motion').textContent = settings.reducedMotion ? 'ACTIVADO' : 'DESACTIVADO';
+  }
 }
 
 $('set-brightness').oninput = e => {
@@ -106,6 +128,14 @@ $('set-volume').oninput = e => {
   applySettings(); saveSettings();
   sfxClick(1200, 0.12, 0.04);
 };
+if ($('set-reduced-motion')) {
+  $('set-reduced-motion').onchange = e => {
+    settings.reducedMotion = e.target.checked;
+    $('val-reduced-motion').textContent = settings.reducedMotion ? 'ACTIVADO' : 'DESACTIVADO';
+    saveSettings();
+    sfxClick(1200, 0.12, 0.04);
+  };
+}
 
 let activeArmoryCat = 'ASSAULT';
 let activeInspectedWeaponId = 'mk7';
@@ -1321,6 +1351,7 @@ function syncActiveWeaponToSlot() {
   slot.boltT = weapon.boltT || 0;
   slot.meleeStage = weapon.meleeStage || 'idle';
   slot.meleeT = weapon.meleeT || 0;
+  slot.reloadWasEmpty = weapon.reloadWasEmpty || false;
 }
 
 function syncSlotToActiveWeapon(slotKey) {
@@ -1337,6 +1368,7 @@ function syncSlotToActiveWeapon(slotKey) {
   weapon.reloading = slot.reloading;
   weapon.reloadT = slot.reloadT;
   weapon.reloadStage = slot.reloadStage;
+  weapon.reloadWasEmpty = slot.reloadWasEmpty || false;
   weapon.recoil = slot.recoil;
   weapon.semiFired = slot.semiFired || false;
   weapon.boltCycling = slot.boltCycling || false;
@@ -1575,6 +1607,7 @@ document.addEventListener('pointerlockchange', () => {
 document.addEventListener('pointerlockerror', onLockFailed);
 addEventListener('mousemove', e => {
   if (!locked) return;
+  recordMouseDelta(e.movementX, e.movementY);
   player.yaw -= e.movementX * 0.0021;
   player.pitch -= e.movementY * 0.0021;
   player.pitch = Math.max(-1.52, Math.min(1.52, player.pitch));
@@ -1753,6 +1786,8 @@ function shoot() {
   weapon.cooldown = Math.max(0, weapon.cooldown <= 0 ? weapon.cooldown + weapon.fireRate : weapon.fireRate);
   weapon.recoil = Math.min(weapon.recoil + (weapon.recoilKick || 1.0), weapon.recoilMax || 6.0);
   flashTimer = 0.045;
+  triggerFireImpulse(weapon.id, weapon.category);
+  perception.broadcastSound('shot', player.pos, !!weapon.audioSuppressed);
   const audioOpts = weapon.audioSuppressed ? { suppressed: true } : undefined;
   if (weapon.audio && weapon.audio.shot) {
     weapon.audio.shot(audioOpts);
@@ -1799,6 +1834,7 @@ function shoot() {
   const damagedEnemies = new Map();
   let anyHit = false;
   let anyHeadshot = false;
+  let anyArmor = false;
 
   for (let i = 0; i < pellets; i++) {
     const pSpreadX = (Math.random() - 0.5) * spread * 2;
@@ -1823,39 +1859,54 @@ function shoot() {
       while (o && !enemy) { if (o.userData.enemy) enemy = o.userData.enemy; o = o.parent; }
       if (enemy) {
         anyHit = true;
-        const headshot = h.object.userData.head === true;
+        const hitZone = h.object.userData.hitZone || (h.object.userData.head ? 'HEAD' : 'TORSO');
+        const headshot = hitZone === 'HEAD' || hitZone === 'HELMET' || h.object.userData.head === true;
         if (headshot) anyHeadshot = true;
-        const dmg = getDamageWithDropoff(weapon, eDist, headshot);
+        if (hitZone === 'ARMOR_PLATE') anyArmor = true;
+
+        const pelletDmg = getDamageWithDropoff(weapon, eDist, headshot, hitZone);
         if (!damagedEnemies.has(enemy)) {
           damagedEnemies.set(enemy, {
-            totalDmg: dmg,
+            totalDmg: pelletDmg,
             lastPoint: h.point,
             isHeadshot: headshot,
+            hitZone: hitZone,
             dir: dir
           });
         } else {
           const rec = damagedEnemies.get(enemy);
-          rec.totalDmg += dmg;
+          rec.totalDmg += pelletDmg;
           rec.lastPoint = h.point;
-          if (headshot) rec.isHeadshot = true;
+          if (headshot) {
+            rec.isHeadshot = true;
+            rec.hitZone = hitZone;
+          } else if (rec.hitZone !== 'HEAD' && rec.hitZone !== 'HELMET') {
+            rec.hitZone = hitZone;
+          }
         }
       }
     } else if (wDist < Infinity) {
       const h = hitsW[0];
       end = h.point;
       const n = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : new THREE.Vector3(0, 1, 0);
-      spawnBurst(h.point, 0xffc36b, 7, 3.2, 0.1, 0.4);
-      spawnDecal(h.point, n);
+      const sType = h.object.userData.surfaceType || 'concrete';
+      spawnSurfaceImpact(h.point, n, sType);
     }
     spawnTracer(muzzleWorld, end);
   }
 
   if (anyHit) {
-    showHitmarker(anyHeadshot);
+    if (anyHeadshot) {
+      showHitmarker('crit');
+    } else if (anyArmor) {
+      showHitmarker('armor');
+    } else {
+      showHitmarker('normal');
+    }
   }
 
   for (const [enemy, hitData] of damagedEnemies) {
-    const killed = damageEnemy(enemy, hitData.totalDmg, hitData.lastPoint, hitData.isHeadshot, hitData.dir);
+    const killed = damageEnemy(enemy, hitData.totalDmg, hitData.lastPoint, hitData.isHeadshot, hitData.dir, hitData.hitZone);
     waveStats.hits++;
     waveStats.dealt += Math.round(hitData.totalDmg);
     if (killed) {
@@ -1886,6 +1937,7 @@ function tryReload() {
   if (!player.alive || combatSession.switching || combatSession.switchTimer > 0 || weapon.reloading || weapon.boltCycling || weapon.category === 'MELEE' || weapon.fireMode === 'melee' || weapon.ammo >= weapon.magSize || weapon.reserve <= 0) return;
   weapon.reloading = true;
   weapon.reloadT = 0;
+  weapon.reloadWasEmpty = (weapon.ammo === 0);
   adsDown = false;
   adsAmount = 0;
   const scopeEl = $('sniper-scope');
@@ -1947,6 +1999,30 @@ function removeBomb() {
   bombGroup = null; bombLight = null;
 }
 
+function pickWaveArchetype(waveNum, enemyIdx) {
+  if (waveNum <= 2) {
+    return enemyIdx % 3 === 0 ? 'CHASER' : 'SHOOTER';
+  } else if (waveNum <= 4) {
+    const r = (waveNum + enemyIdx) % 4;
+    if (r === 0) return 'CHASER';
+    if (r === 1) return 'FLANKER';
+    return 'SHOOTER';
+  } else if (waveNum <= 7) {
+    const r = (waveNum * 2 + enemyIdx) % 5;
+    if (r === 0) return 'CHASER';
+    if (r === 1) return 'FLANKER';
+    if (r === 2) return 'BRUTE';
+    return 'SHOOTER';
+  } else {
+    const r = (waveNum * 3 + enemyIdx) % 6;
+    if (r === 0) return 'CHASER';
+    if (r === 1) return 'FLANKER';
+    if (r === 2) return 'BRUTE';
+    if (r === 3) return 'ELITE';
+    return 'SHOOTER';
+  }
+}
+
 function spawnSndEnemy() {
   let x, z, tries = 0;
   do {
@@ -1958,10 +2034,23 @@ function spawnSndEnemy() {
     else { x = ARENA - 4; z = t; }
     tries++;
   } while ((pointBlocked(x, z, 0.8) || player.pos.distanceTo(new THREE.Vector3(x, 0, z)) < 16) && tries < 24);
-  const e = makeEnemy(x, z);
-  const elapsed = matchTime - snd.startT;
-  e.hp = 100 + elapsed * 0.8;
-  e.speed += Math.min(elapsed * 0.02, 1.2);
+
+  const sndArchs = ['SHOOTER', 'FLANKER', 'BRUTE', 'ELITE'];
+  const archKey = sndArchs[(snd ? snd.spawned : 0) % sndArchs.length];
+  const e = makeEnemy(x, z, archKey);
+  const elapsed = snd ? matchTime - snd.startT : 0;
+  e.hp = e.archetype.hpBase + elapsed * 0.8;
+  e.speed = e.archetype.speed + Math.min(elapsed * 0.02, 1.2);
+
+  const hasDefuser = enemies.some(other => other.alive && other.sndRole === 'defuser');
+  e.sndRole = hasDefuser ? 'escort' : 'defuser';
+
+  e.brain = new EnemyAIBrain(e, e.archetype, spatialNav, perception);
+  if (e.sndRole === 'defuser') {
+    e.brain.setState('CHASE', true);
+  } else {
+    e.brain.setState('ALERT', true);
+  }
 }
 
 function fmtTime(s) {
@@ -2003,9 +2092,12 @@ function spawnWave() {
       else { x = ARENA - 4; z = t; }
       tries++;
     } while ((pointBlocked(x, z, 0.8) || player.pos.distanceTo(new THREE.Vector3(x, 0, z)) < 20) && tries < 24);
-    const e = makeEnemy(x, z);
-    e.hp = 100 + (wave - 1) * 12;
-    e.speed += Math.min(wave * 0.12, 1.4);
+
+    const archKey = pickWaveArchetype(wave, i);
+    const e = makeEnemy(x, z, archKey);
+    e.hp = e.archetype.hpBase + (wave - 1) * 12;
+    e.speed = e.archetype.speed + Math.min(wave * 0.12, 1.4);
+    e.brain.setState('PATROL', true);
   }
   betweenWaves = false;
 }
@@ -2058,10 +2150,19 @@ function showHeadshotBanner() {
   showHeadshotBanner._t = setTimeout(() => el.classList.remove('show'), 1450);
 }
 
-function showHitmarker(head) {
+function showHitmarker(type = 'normal') {
   const el = $('hitmarker');
   el.style.opacity = 1;
-  el.querySelectorAll('span').forEach(s => s.style.background = head ? '#ffd000' : '#ff3b30');
+  el.classList.remove('hit-armor', 'hit-crit');
+  if (type === 'armor') {
+    el.classList.add('hit-armor');
+    el.querySelectorAll('span').forEach(s => s.style.background = '#38bdf8');
+  } else if (type === 'head' || type === 'crit') {
+    el.classList.add('hit-crit');
+    el.querySelectorAll('span').forEach(s => s.style.background = '#ffd000');
+  } else {
+    el.querySelectorAll('span').forEach(s => s.style.background = '#ff3b30');
+  }
   clearTimeout(showHitmarker._t);
   showHitmarker._t = setTimeout(() => el.style.opacity = 0, 90);
 }
@@ -2252,6 +2353,7 @@ function startGame(mode) {
   resetConsumablesState(consumablesState);
   dropsManager.clear();
   clearDropVisuals();
+  resetEffects();
   dropsManager.setMode(gameMode);
   dropsManager.setWave(1);
   if ($('pickup-prompt')) $('pickup-prompt').style.display = 'none';
@@ -2303,6 +2405,7 @@ function showEndScreen(victory, title, statsHtml) {
 
 function die() {
   cancelMedkitUse(consumablesState);
+  resetEffects();
   if ($('pickup-prompt')) $('pickup-prompt').style.display = 'none';
   const stats = gameMode === 'snd'
     ? `BAJAS: ${kills} &nbsp;&middot;&nbsp; AGUANTASTE: ${fmtTime(matchTime - snd.startT)}`
@@ -2341,6 +2444,7 @@ function backToMenu() {
   resetConsumablesState(consumablesState);
   dropsManager.clear();
   clearDropVisuals();
+  resetEffects();
   if ($('pickup-prompt')) $('pickup-prompt').style.display = 'none';
   endDelay = 0;
   clearInput();
@@ -2562,68 +2666,35 @@ function stepSim(dt) {
     /* --- cámara --- */
     camera.position.copy(player.pos);
     if (moving && player.grounded) bobT += dt * (sprint ? 13 : 9);
-    const bobY = Math.sin(bobT * 2) * 0.017 * (1 - adsAmount * 0.8);
-    const bobX = Math.cos(bobT) * 0.012 * (1 - adsAmount * 0.8);
+    const motCamScale = settings.reducedMotion ? 0.2 : 1.0;
+    const bobY = Math.sin(bobT * 2) * 0.017 * (1 - adsAmount * 0.8) * motCamScale;
+    const bobX = Math.cos(bobT) * 0.012 * (1 - adsAmount * 0.8) * motCamScale;
     camera.position.y += bobY;
     shake = Math.max(0, shake - dt * 2.5);
-    const shk = shake * 0.03;
+    const shk = shake * 0.03 * motCamScale;
     camera.rotation.set(
       player.pitch + weapon.recoil * 0.004 + (Math.random() - .5) * shk,
       player.yaw + (Math.random() - .5) * shk,
-      Math.cos(bobT) * 0.004 * (1 - adsAmount),
+      Math.cos(bobT) * 0.004 * (1 - adsAmount) * motCamScale,
       'YXZ'
     );
 
     /* --- arma: posición, sway, retroceso, recarga --- */
-    const target = tmpV.copy(GUN_HIP).lerp(GUN_ADS, adsAmount);
-    target.x += bobX * 0.6;
-    target.y += bobY * 0.6;
-    target.z += weapon.recoil * 0.013;
-    if (combatSession.switching) {
-      const switchProgress = 1 - (combatSession.switchTimer / combatSession.switchDuration);
-      const dip = Math.sin(switchProgress * Math.PI) * 0.28;
-      target.y -= dip;
-      gunGroup.rotation.x -= dip * 1.5;
-    } else if (weapon.fireMode === 'melee' && weapon.meleeStage && weapon.meleeStage !== 'idle') {
-      if (weapon.meleeStage === 'windup') {
-        const wt = Math.min(1, weapon.meleeT / 0.08);
-        target.x += 0.04 * wt;
-        target.y += 0.03 * wt;
-        gunGroup.rotation.z -= 0.35 * wt;
-      } else if (weapon.meleeStage === 'strike') {
-        const st = Math.min(1, weapon.meleeT / 0.12);
-        target.x += 0.04 - 0.24 * st;
-        target.y += 0.03 - 0.12 * st;
-        gunGroup.rotation.z = -0.35 + 1.3 * st;
-        gunGroup.rotation.y = 0.6 * Math.sin(st * Math.PI);
-      } else if (weapon.meleeStage === 'recovery') {
-        const rt = 1 - Math.min(1, weapon.meleeT / 0.25);
-        target.x -= 0.20 * rt;
-        target.y -= 0.09 * rt;
-        gunGroup.rotation.z += 0.95 * rt;
-      }
-    } else if (weapon.boltCycling) {
-      const bt = Math.min(1, weapon.boltT / (weapon.boltDuration || 0.85));
-      const dip = Math.sin(bt * Math.PI);
-      target.y -= dip * 0.12;
-      gunGroup.rotation.z += dip * 0.22;
-      gunGroup.rotation.x -= dip * 0.16;
-    } else if (weapon.reloading) {
-      if (weapon.reloadType === 'shell') {
-        target.y -= 0.12;
-        gunGroup.rotation.x = -0.35 + Math.sin(weapon.reloadT * 8) * 0.08;
-        gunGroup.rotation.z = 0.25;
-      } else {
-        const t = weapon.reloadT / weapon.reloadTime;
-        target.y -= Math.sin(t * Math.PI) * 0.22;
-        gunGroup.rotation.x = -Math.sin(t * Math.PI) * 0.8;
-      }
-    } else {
-      gunGroup.rotation.x += (weapon.recoil * 0.02 - gunGroup.rotation.x) * Math.min(1, dt * 14);
-    }
-    gunGroup.rotation.z = (sprint && moving && !adsDown ? 0.25 : 0) + Math.cos(bobT) * 0.006;
-    gunGroup.rotation.y = sprint && moving && !adsDown ? 0.3 : 0;
-    gunGroup.position.lerp(target, Math.min(1, dt * 16));
+    const curWpnMesh = weaponMeshSubGroup.children[0] || null;
+    updateViewModel({
+      dt,
+      gunGroup,
+      weapon,
+      weaponMesh: curWpnMesh,
+      combatSession,
+      adsAmount,
+      adsDown,
+      sprint,
+      moving,
+      bobT,
+      baseHip: GUN_HIP,
+      baseAds: GUN_ADS
+    });
 
     /* --- fogonazo --- */
     flashTimer -= dt;
@@ -2638,20 +2709,19 @@ function stepSim(dt) {
     }
 
     /* --- enemigos --- */
+    perception.update(matchTime);
     let anyAlive = false;
-    for (const e of enemies) {
+    for (let enemyIdx = 0; enemyIdx < enemies.length; enemyIdx++) {
+      const e = enemies[enemyIdx];
       if (!e.alive) {
-        // animación de muerte
         if (e.deathT < 1) {
           e.deathT += dt * (e.deathHeadshot ? 2.8 : 2.2);
           const t = Math.min(1, e.deathT);
           if (e.deathHeadshot) {
-            // headshot: se desploma de espaldas con un giro seco
             e.group.rotation.x = Math.PI / 2 * (t * t);
             e.group.rotation.y += dt * 3.5 * (1 - t);
             e.group.position.y = -0.15 * t;
           } else {
-            // muerte normal: cae de bruces
             e.group.rotation.x = -Math.PI / 2 * t;
             e.group.position.y = -0.1 * t;
           }
@@ -2659,64 +2729,67 @@ function stepSim(dt) {
         continue;
       }
       anyAlive = true;
-      const toP = player.pos.clone().sub(e.group.position); toP.y = 0;
-      const dist = toP.length();
-      toP.normalize();
 
-      // objetivo de navegación: el jugador (oleadas) o la bomba (buscar y destruir)
+      if (!e.brain) {
+        e.brain = new EnemyAIBrain(e, e.archetype || ARCHETYPES.SHOOTER, spatialNav, perception);
+      }
+
+      if (e.flinchRot) {
+        const decay = Math.exp(-18 * dt);
+        e.flinchRot.x *= decay;
+        e.flinchRot.y *= decay;
+        e.flinchRot.z *= decay;
+        e.flinchOffset.x *= decay;
+        e.flinchOffset.z *= decay;
+        if (e.torso) {
+          e.torso.rotation.x = e.flinchRot.x;
+          e.torso.rotation.y = e.flinchRot.y;
+          e.torso.rotation.z = e.flinchRot.z;
+        }
+        if (e.head) {
+          e.head.rotation.x = e.flinchRot.x * 1.2;
+          e.head.rotation.y = e.flinchRot.y * 1.2;
+        }
+      }
+
       e.defusing = false;
-      let navDir = toP, retreat = dist < 6, strafeAmt = 0.6, advance = dist > 11;
-      if (gameMode === 'snd' && bombGroup) {
+      if (gameMode === 'snd' && bombGroup && e.sndRole === 'defuser') {
         const toB = bombPos.clone().sub(e.group.position); toB.y = 0;
         const distB = toB.length();
         if (distB < 2.3) {
-          // en la bomba: desactivar (quieto, indefenso mientras trabaja)
           e.defusing = true;
           e.group.rotation.y = Math.atan2(toB.x, toB.z);
           e.legL.rotation.x = e.legR.rotation.x = 0;
-        } else {
-          navDir = toB.normalize();
-          retreat = false; advance = true; strafeAmt = 0.3;
         }
       }
 
       if (!e.defusing) {
-        e.group.rotation.y = Math.atan2(navDir.x, navDir.z);
-        e.strafeTimer -= dt;
-        if (e.strafeTimer <= 0) { e.strafeDir *= -1; e.strafeTimer = 1.2 + Math.random() * 2; }
-        const move = new THREE.Vector3();
-        if (advance) move.add(navDir);
-        else if (retreat) move.sub(navDir);
-        move.add(new THREE.Vector3(-navDir.z, 0, navDir.x).multiplyScalar(e.strafeDir * strafeAmt));
-        move.normalize().multiplyScalar(e.speed * dt);
-        e.group.position.add(move);
-        // misma resolución de colisión que el jugador: nunca puede acabar dentro de un AABB
+        e.brain.update(dt, player, enemies, enemyIdx, gameMode, bombPos, matchTime);
         pushOutCircle(e.group.position, 0.5, 0.1, 1.9);
-
-        // animación piernas
-        e.walkPhase += dt * e.speed * 3.2;
-        e.legL.rotation.x = Math.sin(e.walkPhase) * 0.6;
-        e.legR.rotation.x = -Math.sin(e.walkPhase) * 0.6;
       }
 
-      // disparar (nunca mientras desactiva)
       e.fireTimer -= dt;
-      if (!e.defusing && e.fireTimer <= 0 && dist < 38) {
-        e.fireTimer = 0.9 + Math.random() * 1.6 - Math.min(wave * 0.04, 0.5);
-        if (enemyLOS(e, player.pos)) {
+      const canShootState = e.brain.state === AI_STATES.ATTACK || e.brain.state === AI_STATES.CHASE;
+      const toP = player.pos.clone().sub(e.group.position); toP.y = 0;
+      const dist = toP.length();
+
+      if (!e.defusing && canShootState && e.fireTimer <= 0 && dist < (e.archetype ? e.archetype.attackRange : 38)) {
+        const baseCd = e.archetype ? e.archetype.fireCooldown : 1.4;
+        e.fireTimer = baseCd * (0.8 + Math.random() * 0.4) - Math.min(wave * 0.03, 0.4);
+
+        if (perception.checkVision(e, player.pos, e.brain.state)) {
           sfxEnemyShot();
           const from = e.group.position.clone().add(new THREE.Vector3(0, 1.4, 0));
-          // error de puntería: crece con distancia y con el movimiento del jugador, baja con la dificultad
           const lvl = gameMode === 'snd' ? Math.min((matchTime - snd.startT) / 20, 4) : wave;
-          const err = Math.max(0.12,
-            0.30 + dist * 0.026 + (moving ? 0.45 : 0) + (sprint ? 0.35 : 0) - Math.min(lvl * 0.05, 0.45));
+          const archErrMod = e.archetype?.id === 'elite' ? -0.15 : (e.archetype?.id === 'brute' ? 0.12 : 0);
+          const err = Math.max(0.08,
+            0.26 + dist * 0.022 + (moving ? 0.40 : 0) + (sprint ? 0.30 : 0) + archErrMod - Math.min(lvl * 0.05, 0.45));
           const aim = new THREE.Vector3(
             player.pos.x + (Math.random() - .5) * 2 * err,
             player.pos.y - 0.5 + (Math.random() - .5) * 2 * err * 0.6,
             player.pos.z + (Math.random() - .5) * 2 * err);
           const dir = aim.sub(from).normalize();
 
-          // la bala es un raycast real: primero paredes, luego hitbox del jugador
           raycaster.set(from, dir);
           raycaster.far = 80;
           const wh = raycaster.intersectObjects(solidMeshes(), false);
@@ -2727,7 +2800,8 @@ function stepSim(dt) {
           if (hit && hit.dist < wallD) {
             spawnTracer(from, hit.point);
             spawnBurst(hit.point, 0xb01818, 6, 2.2, 0.08, 0.4, -4);
-            damagePlayer((7 + Math.random() * 6 + lvl) * hit.mult, e.group.position);
+            const baseDmg = e.archetype?.id === 'elite' ? 14 : (e.archetype?.id === 'chaser' ? 11 : 8);
+            damagePlayer((baseDmg + Math.random() * 5 + lvl) * hit.mult, e.group.position);
           } else if (wallD < Infinity) {
             const h = wh[0];
             spawnTracer(from, h.point);
@@ -3104,6 +3178,10 @@ window.__bp.checkMeleeHit = checkMeleeHit;
 window.__bp.enemies = enemies;
 window.__bp.makeEnemy = makeEnemy;
 window.__bp.clearEnemies = clearEnemies;
+window.__bp.damageEnemy = damageEnemy;
+window.__bp.getDamageWithDropoff = getDamageWithDropoff;
+window.__bp.sfxHit = sfxHit;
+window.__bp.showHitmarker = showHitmarker;
 window.__bp.player = player;
 window.__bp.setMouseDown = (v) => { mouseDown = v; };
 window.__bp.setAdsDown = (v) => { adsDown = v; };
@@ -3111,6 +3189,20 @@ window.__bp.startGame = startGame;
 window.__bp.updateHUD = updateHUD;
 window.__bp.solidMeshes = solidMeshes;
 window.__bp.renderer = renderer;
+window.__bp.getViewModelState = getViewModelState;
+window.__bp.armsRig = armsRig;
+window.__bp.triggerFireImpulse = triggerFireImpulse;
+window.__bp.resetViewModelState = resetViewModelState;
+window.__bp.weaponMeshSubGroup = weaponMeshSubGroup;
+window.__bp.spatialNav = spatialNav;
+window.__bp.perception = perception;
+window.__bp.AI_STATES = AI_STATES;
+window.__bp.ARCHETYPES = ARCHETYPES;
+window.__bp.getSndState = () => snd ? { timeLeft: snd.timeLeft, defuse: snd.defuse, ended: snd.ended, spawned: snd.spawned } : null;
+window.__bp.getPhase = () => phase;
+window.__bp.resetEffects = resetEffects;
+window.__bp.spawnSurfaceImpact = spawnSurfaceImpact;
+window.__bp.THREE = THREE;
 
 applySettings();
 refreshSettingsUI();
