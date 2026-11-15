@@ -7,12 +7,23 @@ import { ARCHETYPES, EnemyAIBrain } from './enemy-ai.js';
 
 let globalNavProvider = null;
 let globalPerceptionProvider = null;
+const deathListeners = new Set();
 
 export const enemies = [];
 
 export function setAISystems(nav, perc) {
   globalNavProvider = nav;
   globalPerceptionProvider = perc;
+}
+
+export function addEnemyDeathListener(fn) {
+  if (typeof fn === 'function') deathListeners.add(fn);
+  return () => deathListeners.delete(fn);
+}
+
+export function setEnemyDeathListener(fn) {
+  deathListeners.clear();
+  if (typeof fn === 'function') deathListeners.add(fn);
 }
 
 const bodyMatE = new THREE.MeshStandardMaterial({ color: 0x3d4435, roughness: 0.8 });
@@ -187,6 +198,9 @@ export function damageEnemy(e, dmg, point, headshot = false, impulse = null, hit
       e.brain.setState('DEAD', true);
     }
     if (headshot) popHead(e, impulse);
+    for (const listener of deathListeners) {
+      try { listener(e, headshot); } catch {}
+    }
     return true;
   }
   return false;

@@ -447,3 +447,50 @@ export class EnemyAIBrain {
     this.enemy.group.rotation.y += diff * Math.min(1.0, dt * this.visualFeedback.turnSpeed);
   }
 }
+
+export class OffensivePressureCoordinator {
+  constructor(minInterval = 0.16) {
+    this.minInterval = minInterval;
+    this.lastFireTime = -Infinity;
+    this.activeShooter = null;
+    this.lastShotTimeByEnemy = new Map();
+    this.rng = Math.random;
+  }
+
+  setRng(fn) {
+    if (typeof fn === 'function') this.rng = fn;
+  }
+
+  canShoot(enemy, currentTime) {
+    if (currentTime - this.lastFireTime < this.minInterval) {
+      return false;
+    }
+    if (this.activeShooter === enemy && this.lastShotTimeByEnemy.size > 1) {
+      return false;
+    }
+    return true;
+  }
+
+  requestPermission(enemy, currentTime) {
+    if (!this.canShoot(enemy, currentTime)) {
+      return false;
+    }
+    this.lastFireTime = currentTime;
+    this.activeShooter = enemy;
+    this.lastShotTimeByEnemy.set(enemy, currentTime);
+    return true;
+  }
+
+  releasePermission(enemy) {
+    if (this.activeShooter === enemy) {
+      this.activeShooter = null;
+    }
+    this.lastShotTimeByEnemy.delete(enemy);
+  }
+
+  reset() {
+    this.lastFireTime = -Infinity;
+    this.activeShooter = null;
+    this.lastShotTimeByEnemy.clear();
+  }
+}

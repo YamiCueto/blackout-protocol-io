@@ -20,7 +20,8 @@ const suites = [
   { name: 'test_sprint8_2.mjs', count: 21, desc: 'Arsenal completo: 5 armas nuevas, cerrojo real AWM-338, combate cuerpo a cuerpo y balance' },
   { name: 'test_sprint8_3.mjs', count: 15, desc: 'Animaciones procedurales, brazos tácticos, piezas mecánicas y composición visual' },
   { name: 'test_sprint8_4.mjs', count: 22, desc: 'Inteligencia artificial enemiga, percepción sensorial, navegación táctica A* y 5 arquetipos' },
-  { name: 'test_sprint8_5.mjs', count: 20, desc: 'Sistema de impactos, daño localizado, blindaje táctico y respuesta de combate' }
+  { name: 'test_sprint8_5.mjs', count: 20, desc: 'Sistema de impactos, daño localizado, blindaje táctico y respuesta de combate' },
+  { name: 'test_sprint8_6.mjs', count: 16, desc: 'Control de concurrencia, cola de refuerzos, regulador de presión ofensiva y estabilidad' }
 ];
 
 async function runSuite(suite) {
@@ -76,7 +77,7 @@ console.log('-------------------------------------------------------------------
 console.log(`TOTAL GENERAL: ${passedTests}/${totalTests} PRUEBAS PASADAS (100% OK)`);
 console.log('========================================================================================');
 
-if (passedTests !== totalTests || totalTests !== 237) {
+if (passedTests !== totalTests || totalTests !== 253) {
   process.exit(1);
 } else {
   process.exit(0);

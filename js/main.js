@@ -5,10 +5,10 @@ import { audio, applyVolume, sfxShot, sfxClick, sfxReload, sfxHurt, sfxEnemyShot
 import { ARENA, moon, pushOutCircle, pointBlocked, solidMeshes } from './world.js';
 import { spawnTracer, spawnBurst, spawnDecal, spawnSurfaceImpact, updateEffects, resetEffects } from './effects.js';
 import { weapon, gunGroup, muzzleFlash, flashSprite, GUN_HIP, GUN_ADS, setWeapon, WEAPONS, getDamageWithDropoff, weaponMeshSubGroup } from './weapon.js';
-import { enemies, makeEnemy, damageEnemy, enemyLOS, clearEnemies, updateCorpses, setAISystems } from './enemies.js';
+import { enemies, makeEnemy, damageEnemy, enemyLOS, clearEnemies, updateCorpses, setAISystems, setEnemyDeathListener } from './enemies.js';
 import { SpatialNavigation } from './spatial-nav.js';
 import { PerceptionSystem } from './perception.js';
-import { EnemyAIBrain, ARCHETYPES, AI_STATES } from './enemy-ai.js';
+import { EnemyAIBrain, ARCHETYPES, AI_STATES, OffensivePressureCoordinator } from './enemy-ai.js';
 import { colliders } from './world.js';
 import { createDiagnostics } from './diagnostics.js';
 import {
@@ -80,6 +80,12 @@ const perception = new PerceptionSystem({
 });
 
 setAISystems(spatialNav, perception);
+setEnemyDeathListener((e) => {
+  if (gameMode === 'waves') {
+    waveKilled++;
+  }
+  offensiveCoordinator.releasePermission(e);
+});
 
 /* ---------------- Ajustes: aplicación y UI ---------------- */
 function applySettings() {
@@ -1238,6 +1244,7 @@ const MODE_INTEL = {
 
 function selectMode(mode) {
   selectedMode = mode;
+  offensiveCoordinator.reset();
   const info = MODE_INTEL[mode];
   if (!info) return;
   const titleEl = $('selected-title');
@@ -1956,6 +1963,19 @@ function tryReload() {
 
 /* ---------------- Oleadas y estadísticas ---------------- */
 let wave = 0, kills = 0, waveDelay = 0, betweenWaves = true;
+let waveTotal = 0;
+let waveKilled = 0;
+let waveSpawnQueue = [];
+let waveSpawnTimer = 0;
+const waveSpawnInterval = 0.8;
+let waveSpawnRetries = 0;
+const offensiveCoordinator = new OffensivePressureCoordinator(0.16);
+
+function getMaxConcurrentEnemies(w) {
+  if (w <= 3) return 6;
+  if (w <= 7) return 8;
+  return 10;
+}
 
 let waveStats = null, waveStartT = 0;
 function resetWaveStats() {
@@ -2075,31 +2095,52 @@ function detonateBomb() {
   endDelay = 1.6;
 }
 
+function spawnNextWaveEnemy() {
+  if (phase !== 'PLAYING' || !player.alive || gameMode !== 'waves' || betweenWaves || waveSpawnQueue.length === 0) return false;
+  let x, z, tries = 0;
+  do {
+    const edge = Math.floor(Math.random() * 4);
+    const t = (Math.random() * 2 - 1) * (ARENA - 6);
+    if (edge === 0) { x = t; z = -ARENA + 4; }
+    else if (edge === 1) { x = t; z = ARENA - 4; }
+    else if (edge === 2) { x = -ARENA + 4; z = t; }
+    else { x = ARENA - 4; z = t; }
+    tries++;
+  } while ((pointBlocked(x, z, 0.8) || player.pos.distanceTo(new THREE.Vector3(x, 0, z)) < 20) && tries < 24);
+
+  if (pointBlocked(x, z, 0.8) || player.pos.distanceTo(new THREE.Vector3(x, 0, z)) < 16) {
+    waveSpawnRetries++;
+    return false;
+  }
+
+  const item = waveSpawnQueue.shift();
+  const e = makeEnemy(x, z, item.archKey);
+  e.hp = e.archetype.hpBase + (item.wave - 1) * 12;
+  e.speed = e.archetype.speed + Math.min(item.wave * 0.12, 1.4);
+  e.brain.setState('PATROL', true);
+  return true;
+}
+
 function spawnWave() {
   wave++;
   $('wave-num').textContent = 'OLEADA ' + wave;
   flashMsg('OLEADA ' + wave);
   resetWaveStats();
-  const n = 3 + wave * 2;
-  for (let i = 0; i < n; i++) {
-    let x, z, tries = 0;
-    do {
-      const edge = Math.floor(Math.random() * 4);
-      const t = (Math.random() * 2 - 1) * (ARENA - 6);
-      if (edge === 0) { x = t; z = -ARENA + 4; }
-      else if (edge === 1) { x = t; z = ARENA - 4; }
-      else if (edge === 2) { x = -ARENA + 4; z = t; }
-      else { x = ARENA - 4; z = t; }
-      tries++;
-    } while ((pointBlocked(x, z, 0.8) || player.pos.distanceTo(new THREE.Vector3(x, 0, z)) < 20) && tries < 24);
-
-    const archKey = pickWaveArchetype(wave, i);
-    const e = makeEnemy(x, z, archKey);
-    e.hp = e.archetype.hpBase + (wave - 1) * 12;
-    e.speed = e.archetype.speed + Math.min(wave * 0.12, 1.4);
-    e.brain.setState('PATROL', true);
+  waveTotal = 3 + wave * 2;
+  waveKilled = 0;
+  waveSpawnQueue = [];
+  waveSpawnTimer = 0;
+  waveSpawnRetries = 0;
+  for (let i = 0; i < waveTotal; i++) {
+    waveSpawnQueue.push({ index: i, archKey: pickWaveArchetype(wave, i), wave: wave });
   }
   betweenWaves = false;
+  const maxCon = getMaxConcurrentEnemies(wave);
+  const initialToSpawn = Math.min(maxCon, waveSpawnQueue.length);
+  for (let i = 0; i < initialToSpawn; i++) {
+    const ok = spawnNextWaveEnemy();
+    if (!ok) break;
+  }
 }
 
 function showWaveSummary() {
@@ -2269,6 +2310,12 @@ function damagePlayer(dmg, fromPos) {
 function startGame(mode) {
   gameMode = mode;
   clearEnemies();
+  waveTotal = 0;
+  waveKilled = 0;
+  waveSpawnQueue = [];
+  waveSpawnTimer = 0;
+  waveSpawnRetries = 0;
+  offensiveCoordinator.reset();
   resetEffects();
   clearDamageIndicators();
   removeBomb();
@@ -2365,6 +2412,12 @@ function startGame(mode) {
   muzzleFlash.intensity = 0;
   flashSprite.visible = false;
   wave = 0; kills = 0; $('kills').textContent = 0;
+  waveTotal = 0;
+  waveKilled = 0;
+  waveSpawnQueue = [];
+  waveSpawnTimer = 0;
+  waveSpawnRetries = 0;
+  offensiveCoordinator.reset();
 
   if (gameMode === 'snd') {
     player.pos.set(0, 1.7, 18);
@@ -2406,6 +2459,9 @@ function showEndScreen(victory, title, statsHtml) {
 function die() {
   cancelMedkitUse(consumablesState);
   resetEffects();
+  waveSpawnQueue = [];
+  waveSpawnTimer = 0;
+  offensiveCoordinator.reset();
   if ($('pickup-prompt')) $('pickup-prompt').style.display = 'none';
   const stats = gameMode === 'snd'
     ? `BAJAS: ${kills} &nbsp;&middot;&nbsp; AGUANTASTE: ${fmtTime(matchTime - snd.startT)}`
@@ -2450,6 +2506,12 @@ function backToMenu() {
   clearInput();
   document.exitPointerLock();
   clearEnemies();
+  waveTotal = 0;
+  waveKilled = 0;
+  waveSpawnQueue = [];
+  waveSpawnTimer = 0;
+  waveSpawnRetries = 0;
+  offensiveCoordinator.reset();
   resetEffects();
   clearDamageIndicators();
   removeBomb();
@@ -2501,7 +2563,12 @@ let bobT = 0, shake = 0, hitFlash = 0;
 const tmpV = new THREE.Vector3();
 const MAX_STEP = 0.05, MAX_FRAME = 0.25;
 
+let enemyLoopOffset = 0;
 function stepSim(dt) {
+  if (player.alive && player.hp <= 0) {
+    die();
+    return;
+  }
   if (phase === 'PLAYING' && player.alive) {
     matchTime += dt;
     /* --- movimiento --- */
@@ -2711,7 +2778,10 @@ function stepSim(dt) {
     /* --- enemigos --- */
     perception.update(matchTime);
     let anyAlive = false;
-    for (let enemyIdx = 0; enemyIdx < enemies.length; enemyIdx++) {
+    const numEnemies = enemies.length;
+    enemyLoopOffset = (enemyLoopOffset + 1) % Math.max(1, numEnemies);
+    for (let i = 0; i < numEnemies; i++) {
+      const enemyIdx = (i + enemyLoopOffset) % numEnemies;
       const e = enemies[enemyIdx];
       if (!e.alive) {
         if (e.deathT < 1) {
@@ -2770,54 +2840,76 @@ function stepSim(dt) {
 
       e.fireTimer -= dt;
       const canShootState = e.brain.state === AI_STATES.ATTACK || e.brain.state === AI_STATES.CHASE;
+      if (!canShootState) {
+        offensiveCoordinator.releasePermission(e);
+      }
       const toP = player.pos.clone().sub(e.group.position); toP.y = 0;
       const dist = toP.length();
 
       if (!e.defusing && canShootState && e.fireTimer <= 0 && dist < (e.archetype ? e.archetype.attackRange : 38)) {
-        const baseCd = e.archetype ? e.archetype.fireCooldown : 1.4;
-        e.fireTimer = baseCd * (0.8 + Math.random() * 0.4) - Math.min(wave * 0.03, 0.4);
-
         if (perception.checkVision(e, player.pos, e.brain.state)) {
-          sfxEnemyShot();
-          const from = e.group.position.clone().add(new THREE.Vector3(0, 1.4, 0));
-          const lvl = gameMode === 'snd' ? Math.min((matchTime - snd.startT) / 20, 4) : wave;
-          const archErrMod = e.archetype?.id === 'elite' ? -0.15 : (e.archetype?.id === 'brute' ? 0.12 : 0);
-          const err = Math.max(0.08,
-            0.26 + dist * 0.022 + (moving ? 0.40 : 0) + (sprint ? 0.30 : 0) + archErrMod - Math.min(lvl * 0.05, 0.45));
-          const aim = new THREE.Vector3(
-            player.pos.x + (Math.random() - .5) * 2 * err,
-            player.pos.y - 0.5 + (Math.random() - .5) * 2 * err * 0.6,
-            player.pos.z + (Math.random() - .5) * 2 * err);
-          const dir = aim.sub(from).normalize();
+          if (gameMode !== 'waves' || offensiveCoordinator.requestPermission(e, matchTime)) {
+            const baseCd = e.archetype ? e.archetype.fireCooldown : 1.4;
+            e.fireTimer = baseCd * (0.8 + Math.random() * 0.4) - Math.min(wave * 0.03, 0.4);
+            sfxEnemyShot();
+            const from = e.group.position.clone().add(new THREE.Vector3(0, 1.4, 0));
+            const lvl = gameMode === 'snd' ? Math.min((matchTime - snd.startT) / 20, 4) : wave;
+            const archErrMod = e.archetype?.id === 'elite' ? -0.15 : (e.archetype?.id === 'brute' ? 0.12 : 0);
+            const err = Math.max(0.08,
+              0.26 + dist * 0.022 + (moving ? 0.40 : 0) + (sprint ? 0.30 : 0) + archErrMod - Math.min(lvl * 0.05, 0.45));
+            const aim = new THREE.Vector3(
+              player.pos.x + (Math.random() - .5) * 2 * err,
+              player.pos.y - 0.5 + (Math.random() - .5) * 2 * err * 0.6,
+              player.pos.z + (Math.random() - .5) * 2 * err);
+            const dir = aim.sub(from).normalize();
 
-          raycaster.set(from, dir);
-          raycaster.far = 80;
-          const wh = raycaster.intersectObjects(solidMeshes(), false);
-          raycaster.far = 300;
-          const wallD = wh.length ? wh[0].distance : Infinity;
-          const hit = rayHitsPlayer(from, dir);
+            raycaster.set(from, dir);
+            raycaster.far = 80;
+            const wh = raycaster.intersectObjects(solidMeshes(), false);
+            raycaster.far = 300;
+            const wallD = wh.length ? wh[0].distance : Infinity;
+            const hit = rayHitsPlayer(from, dir);
 
-          if (hit && hit.dist < wallD) {
-            spawnTracer(from, hit.point);
-            spawnBurst(hit.point, 0xb01818, 6, 2.2, 0.08, 0.4, -4);
-            const baseDmg = e.archetype?.id === 'elite' ? 14 : (e.archetype?.id === 'chaser' ? 11 : 8);
-            damagePlayer((baseDmg + Math.random() * 5 + lvl) * hit.mult, e.group.position);
-          } else if (wallD < Infinity) {
-            const h = wh[0];
-            spawnTracer(from, h.point);
-            const n = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : new THREE.Vector3(0, 1, 0);
-            spawnBurst(h.point, 0xffc36b, 4, 2.5, 0.08, 0.3);
-            spawnDecal(h.point, n);
+            if (hit && hit.dist < wallD) {
+              spawnTracer(from, hit.point);
+              spawnBurst(hit.point, 0xb01818, 6, 2.2, 0.08, 0.4, -4);
+              const baseDmg = e.archetype?.id === 'elite' ? 14 : (e.archetype?.id === 'chaser' ? 11 : 8);
+              damagePlayer((baseDmg + Math.random() * 5 + lvl) * hit.mult, e.group.position);
+            } else if (wallD < Infinity) {
+              const h = wh[0];
+              spawnTracer(from, h.point);
+              const n = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : new THREE.Vector3(0, 1, 0);
+              spawnBurst(h.point, 0xffc36b, 4, 2.5, 0.08, 0.3);
+              spawnDecal(h.point, n);
+            } else {
+              spawnTracer(from, from.clone().addScaledVector(dir, 60));
+            }
           } else {
-            spawnTracer(from, from.clone().addScaledVector(dir, 60));
+            e.fireTimer = 0.08 + offensiveCoordinator.rng() * 0.08;
           }
+        } else {
+          offensiveCoordinator.releasePermission(e);
+          e.fireTimer = 0.20 + (gameMode === 'waves' ? offensiveCoordinator.rng() : Math.random()) * 0.20;
         }
       }
     }
 
     /* --- modo oleadas --- */
     if (gameMode === 'waves') {
-      if (!betweenWaves && !anyAlive) {
+      let aliveCount = 0;
+      for (let i = 0; i < enemies.length; i++) {
+        if (enemies[i].alive) aliveCount++;
+      }
+      const maxCon = getMaxConcurrentEnemies(wave);
+      if (!betweenWaves && aliveCount < maxCon && waveSpawnQueue.length > 0) {
+        waveSpawnTimer -= dt;
+        if (waveSpawnTimer <= 0) {
+          const spawned = spawnNextWaveEnemy();
+          if (spawned) aliveCount++;
+          waveSpawnTimer = spawned ? waveSpawnInterval : 0.2;
+        }
+      }
+      if (!betweenWaves && aliveCount === 0 && waveSpawnQueue.length === 0 && waveKilled >= waveTotal) {
         betweenWaves = true;
         refillSlotReserve('primary', Math.max(1, Math.round(getSlotMaxReserve('primary') * 0.5)));
         if (combatSession.slots.secondary?.id) {
@@ -3000,10 +3092,21 @@ const diagnostics = createDiagnostics(renderer, scene, () => {
   return {
     phase, mode: gameMode, enemiesAlive: alive, enemiesTotal: enemies.length, matchTime,
     sceneChildren: activeScene.children.length,
+    waveTotal, waveKilled, wavePending: waveSpawnQueue.length
   };
 }, {
   killPlayer: () => damagePlayer(1e6),
-  killAllEnemies: () => { for (const e of enemies.slice()) if (e.alive) damageEnemy(e, 1e6, e.group.position, Math.random() < 0.5, null); },
+  killAllEnemies: () => {
+    if (gameMode === 'waves') {
+      waveKilled += waveSpawnQueue.length;
+      waveSpawnQueue.length = 0;
+    }
+    for (const e of enemies.slice()) {
+      if (e.alive) {
+        damageEnemy(e, 1e6, e.group.position, Math.random() < 0.5, null);
+      }
+    }
+  },
   heal: () => { player.hp = 100; },
   setSndTime: s => { if (snd) snd.timeLeft = s; },
   setSndDefuse: s => { if (snd) snd.defuse = s; },
@@ -3203,6 +3306,11 @@ window.__bp.getPhase = () => phase;
 window.__bp.resetEffects = resetEffects;
 window.__bp.spawnSurfaceImpact = spawnSurfaceImpact;
 window.__bp.THREE = THREE;
+window.__bp.getMaxConcurrentEnemies = getMaxConcurrentEnemies;
+window.__bp.getWaveState = () => ({ wave, waveTotal, waveKilled, wavePending: waveSpawnQueue.length, waveSpawnRetries, betweenWaves });
+window.__bp.getWaveSpawnQueue = () => waveSpawnQueue;
+window.__bp.offensiveCoordinator = offensiveCoordinator;
+window.__bp.spawnNextWaveEnemy = spawnNextWaveEnemy;
 
 applySettings();
 refreshSettingsUI();
