@@ -55,6 +55,7 @@ scene.add(moon);
   );
   g.rotation.x = -Math.PI / 2;
   g.receiveShadow = true;
+  g.userData.surfaceType = 'ground';
   scene.add(g);
 }
 
@@ -70,6 +71,7 @@ scene.add(moon);
     const w = new THREE.Mesh(new THREE.BoxGeometry(sx, h, sz), mat);
     w.position.set(x, h / 2, z);
     w.castShadow = w.receiveShadow = true;
+    w.userData.surfaceType = 'concrete';
     scene.add(w); addCollider(w);
   }
 }
@@ -80,30 +82,31 @@ const matContainer1 = new THREE.MeshStandardMaterial({ map: texMetal, color: 0x7
 const matContainer2 = new THREE.MeshStandardMaterial({ map: texMetal, color: 0x2e4a66, roughness: 0.6, metalness: 0.45 });
 const matCrate = new THREE.MeshStandardMaterial({ map: texCrate, roughness: 0.85 });
 
-function box(w, h, d, mat, x, z, ry = 0) {
+function box(w, h, d, mat, x, z, ry = 0, surfaceType = 'concrete') {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   m.position.set(x, h / 2, z);
   m.rotation.y = ry;
   m.castShadow = m.receiveShadow = true;
+  m.userData.surfaceType = surfaceType;
   scene.add(m); addCollider(m);
   return m;
 }
 
-box(16, 10, 12, matBuilding, -34, -30);
-box(12, 14, 12, matBuilding, 32, -34);
-box(18, 8, 10, matBuilding, 30, 32, 0.12);
-box(10, 12, 16, matBuilding, -36, 28);
-box(12, 6, 6, matContainer1, -8, -20, 0.3);
-box(12, 6, 6, matContainer2, 12, 16, -0.7);
-box(12, 6, 6, matContainer1, 18, -8, 1.2);
-box(6, 6, 12, matContainer2, -18, 10, 0.1);
-box(3, 3, 3, matCrate, -2, 6);
-box(3, 3, 3, matCrate, 1, 6.6, 0.5);
-box(3, 3, 3, matCrate, -0.5, 9.4, 0.2);
-box(3, 3, 3, matCrate, 22, 20, 0.8);
-box(3, 3, 3, matCrate, -24, -8, 0.4);
-box(3, 3, 3, matCrate, 8, -32, 1.0);
-box(3, 3, 3, matCrate, -14, 34, 0.1);
+box(16, 10, 12, matBuilding, -34, -30, 0, 'concrete');
+box(12, 14, 12, matBuilding, 32, -34, 0, 'concrete');
+box(18, 8, 10, matBuilding, 30, 32, 0.12, 'concrete');
+box(10, 12, 16, matBuilding, -36, 28, 0, 'concrete');
+box(12, 6, 6, matContainer1, -8, -20, 0.3, 'metal');
+box(12, 6, 6, matContainer2, 12, 16, -0.7, 'metal');
+box(12, 6, 6, matContainer1, 18, -8, 1.2, 'metal');
+box(6, 6, 12, matContainer2, -18, 10, 0.1, 'metal');
+box(3, 3, 3, matCrate, -2, 6, 0, 'wood');
+box(3, 3, 3, matCrate, 1, 6.6, 0.5, 'wood');
+box(3, 3, 3, matCrate, -0.5, 9.4, 0.2, 'wood');
+box(3, 3, 3, matCrate, 22, 20, 0.8, 'wood');
+box(3, 3, 3, matCrate, -24, -8, 0.4, 'wood');
+box(3, 3, 3, matCrate, 8, -32, 1.0, 'wood');
+box(3, 3, 3, matCrate, -14, 34, 0.1, 'wood');
 
 // barriles (sin colisión: pequeños)
 {

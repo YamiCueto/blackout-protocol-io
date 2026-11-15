@@ -66,7 +66,33 @@ export function sfxReload() {
   setTimeout(() => sfxClick(1400, .18, .05), 650);
 }
 
-export function sfxHit() { sfxClick(3000, .14, .05); }
+export function sfxHit(type = 'normal') {
+  if (type === 'armor') {
+    sfxArmorHit();
+  } else if (type === 'head' || type === 'crit') {
+    sfxHelmetDing();
+  } else {
+    sfxClick(3000, .14, .05);
+  }
+}
+
+export function sfxArmorHit() {
+  const ac = audio(), t = ac.currentTime;
+  const o1 = ac.createOscillator(); o1.type = 'square'; o1.frequency.setValueAtTime(1250, t); o1.frequency.exponentialRampToValueAtTime(700, t + 0.06);
+  const o2 = ac.createOscillator(); o2.type = 'sawtooth'; o2.frequency.setValueAtTime(2400, t); o2.frequency.exponentialRampToValueAtTime(1100, t + 0.05);
+  const g = ac.createGain(); g.gain.setValueAtTime(0.18, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+  o1.connect(g); o2.connect(g); g.connect(masterGain);
+  o1.start(t); o2.start(t); o1.stop(t + 0.07); o2.stop(t + 0.07);
+}
+
+export function sfxHelmetDing() {
+  const ac = audio(), t = ac.currentTime;
+  const o = ac.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(3200, t); o.frequency.exponentialRampToValueAtTime(3000, t + 0.12);
+  const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 3100; bp.Q.value = 12;
+  const g = ac.createGain(); g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+  o.connect(bp).connect(g).connect(masterGain);
+  o.start(t); o.stop(t + 0.14);
+}
 
 export function sfxHurt() {
   const ac = audio(), t = ac.currentTime;

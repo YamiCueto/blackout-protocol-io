@@ -942,7 +942,7 @@ export function setWeapon(id, options = {}) {
   return weapon;
 }
 
-export function getDamageWithDropoff(wpn, dist, isHeadshot) {
+export function getDamageWithDropoff(wpn, dist, isHeadshot, hitZone = null) {
   const d = wpn.dropoff;
   let mult = 1.0;
   if (d && dist > d.optimal) {
@@ -955,7 +955,17 @@ export function getDamageWithDropoff(wpn, dist, isHeadshot) {
   }
   const headMult = (wpn.id === 'm870' || wpn.id === 'p12' || wpn.id === 'knife') ? 1.5 : (wpn.id === 'awm338' ? 2.5 : 2.2);
   const base = wpn.damage * mult;
-  return isHeadshot ? base * headMult : base;
+
+  if (isHeadshot || hitZone === 'HEAD' || hitZone === 'HELMET') {
+    return base * headMult;
+  }
+  if (hitZone === 'ARM_L' || hitZone === 'ARM_R') {
+    return base * 0.85;
+  }
+  if (hitZone === 'LEG_L' || hitZone === 'LEG_R') {
+    return base * 0.80;
+  }
+  return base;
 }
 
 export function buildLobbyWeaponMesh(id, attachments = null) {
